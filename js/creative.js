@@ -1,7 +1,17 @@
 /* Gerador de artes para Post (1080x1350) e Stories (1080x1920) */
 const Creative = (() => {
-  const GOLD = '#d4af37';
-  const GOLD_L = '#f1d98b';
+  // cores da marca (personalizáveis)
+  const hexRgb = (h) => { h = h.replace('#', ''); if (h.length === 3) h = [...h].map((c) => c + c).join(''); const n = parseInt(h, 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
+  const rgbHex = (r) => '#' + r.map((v) => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, '0')).join('');
+  const mix = (a, b, t) => { const x = hexRgb(a), y = hexRgb(b); return rgbHex(x.map((v, i) => v + (y[i] - v) * t)); };
+  const C = {};
+  function setAccent(hex) {
+    C.a = hex; C.l = mix(hex, '#ffffff', 0.45); C.d = mix(hex, '#000000', 0.38);
+    C.rgb = hexRgb(hex).join(','); C.lrgb = hexRgb(C.l).join(',');
+    C.deep = mix(hex, '#000000', 0.84); C.mid = mix(hex, '#000000', 0.55); C.dark2 = mix(hex, '#000000', 0.9);
+    C.ink = mix(hex, '#000000', 0.45);
+  }
+  setAccent('#d4af37');
 
   function mulberry32(seed) {
     return function () {
@@ -14,9 +24,9 @@ const Creative = (() => {
 
   function goldGrad(ctx, x0, y0, x1, y1) {
     const g = ctx.createLinearGradient(x0, y0, x1, y1);
-    g.addColorStop(0, '#f6e27a');
-    g.addColorStop(0.5, '#d4af37');
-    g.addColorStop(1, '#9c7419');
+    g.addColorStop(0, C.l);
+    g.addColorStop(0.5, C.a);
+    g.addColorStop(1, C.d);
     return g;
   }
 
@@ -35,11 +45,11 @@ const Creative = (() => {
       draw(ctx, W, H) {
         ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
         let g = ctx.createRadialGradient(W / 2, H * 0.12, 10, W / 2, H * 0.12, H * 0.8);
-        g.addColorStop(0, 'rgba(212,175,55,.42)'); g.addColorStop(0.45, 'rgba(120,90,20,.12)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+        g.addColorStop(0, `rgba(${C.rgb},.42)`); g.addColorStop(0.45, `rgba(${hexRgb(C.d).join(',')},.14)`); g.addColorStop(1, 'rgba(0,0,0,0)');
         ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
         ctx.strokeStyle = goldGrad(ctx, 0, 0, W, H); ctx.lineWidth = 3;
         ctx.strokeRect(40, 40, W - 80, H - 80);
-        ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(212,175,55,.45)';
+        ctx.lineWidth = 1; ctx.strokeStyle = `rgba(${C.rgb},.45)`;
         ctx.strokeRect(56, 56, W - 112, H - 112);
       },
     },
@@ -47,11 +57,11 @@ const Creative = (() => {
       id: 'skyline', name: 'Skyline',
       draw(ctx, W, H, rng) {
         let g = ctx.createLinearGradient(0, 0, 0, H);
-        g.addColorStop(0, '#000'); g.addColorStop(0.65, '#0d0b06'); g.addColorStop(1, '#2a1f08');
+        g.addColorStop(0, '#000'); g.addColorStop(0.65, C.dark2); g.addColorStop(1, C.deep);
         ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
         // estrelas
         for (let i = 0; i < 120; i++) {
-          ctx.fillStyle = `rgba(241,217,139,${rng() * 0.5})`;
+          ctx.fillStyle = `rgba(${C.lrgb},${rng() * 0.5})`;
           ctx.fillRect(rng() * W, rng() * H * 0.55, 2, 2);
         }
         // prédios
@@ -62,11 +72,11 @@ const Creative = (() => {
           const h = H * (0.12 + rng() * 0.28);
           ctx.fillStyle = '#050505';
           ctx.fillRect(x, base - h, w, h);
-          ctx.strokeStyle = 'rgba(212,175,55,.35)'; ctx.lineWidth = 1.5;
+          ctx.strokeStyle = `rgba(${C.rgb},.35)`; ctx.lineWidth = 1.5;
           ctx.strokeRect(x, base - h, w, h);
           for (let wy = base - h + 14; wy < base - 10; wy += 22) {
             for (let wx = x + 10; wx < x + w - 12; wx += 18) {
-              if (rng() > 0.55) { ctx.fillStyle = `rgba(241,217,139,${0.25 + rng() * 0.55})`; ctx.fillRect(wx, wy, 7, 10); }
+              if (rng() > 0.55) { ctx.fillStyle = `rgba(${C.lrgb},${0.25 + rng() * 0.55})`; ctx.fillRect(wx, wy, 7, 10); }
             }
           }
           x += w + 4;
@@ -80,7 +90,7 @@ const Creative = (() => {
       id: 'crescimento', name: 'Crescimento',
       draw(ctx, W, H, rng) {
         ctx.fillStyle = '#030303'; ctx.fillRect(0, 0, W, H);
-        ctx.strokeStyle = 'rgba(212,175,55,.07)'; ctx.lineWidth = 1;
+        ctx.strokeStyle = `rgba(${C.rgb},.07)`; ctx.lineWidth = 1;
         for (let x = 0; x < W; x += 60) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
         for (let y = 0; y < H; y += 60) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
         const n = 9, bw = W / (n * 1.6), gap = (W - n * bw) / (n + 1);
@@ -89,14 +99,14 @@ const Creative = (() => {
           const h = H * (0.08 + (i / n) * 0.42 + rng() * 0.06);
           const x = gap + i * (bw + gap);
           const g = ctx.createLinearGradient(0, H - h, 0, H);
-          g.addColorStop(0, 'rgba(212,175,55,.32)'); g.addColorStop(1, 'rgba(212,175,55,.02)');
+          g.addColorStop(0, `rgba(${C.rgb},.32)`); g.addColorStop(1, `rgba(${C.rgb},.02)`);
           ctx.fillStyle = g; ctx.fillRect(x, H - h, bw, h);
           pts.push([x + bw / 2, H - h - 30]);
         }
-        ctx.strokeStyle = 'rgba(241,217,139,.55)'; ctx.lineWidth = 4; ctx.lineJoin = 'round';
+        ctx.strokeStyle = `rgba(${C.lrgb},.55)`; ctx.lineWidth = 4; ctx.lineJoin = 'round';
         ctx.beginPath(); pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.stroke();
         const [lx, ly] = pts[pts.length - 1];
-        ctx.fillStyle = 'rgba(241,217,139,.7)';
+        ctx.fillStyle = `rgba(${C.lrgb},.7)`;
         ctx.beginPath(); ctx.moveTo(lx + 34, ly - 26); ctx.lineTo(lx - 6, ly - 22); ctx.lineTo(lx + 20, ly + 10); ctx.fill();
         vignette(ctx, W, H, 0.8);
       },
@@ -109,7 +119,7 @@ const Creative = (() => {
         ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
         for (let i = 0; i < 26; i++) {
           const gold = rng() > 0.55;
-          ctx.strokeStyle = gold ? `rgba(212,175,55,${0.12 + rng() * 0.35})` : `rgba(255,255,255,${0.03 + rng() * 0.07})`;
+          ctx.strokeStyle = gold ? `rgba(${C.rgb},${0.12 + rng() * 0.35})` : `rgba(255,255,255,${0.03 + rng() * 0.07})`;
           ctx.lineWidth = 0.6 + rng() * (gold ? 2.4 : 5);
           ctx.beginPath();
           let x = rng() * W, y = -50;
@@ -128,11 +138,11 @@ const Creative = (() => {
       id: 'amanhecer', name: 'Amanhecer',
       draw(ctx, W, H, rng) {
         let g = ctx.createLinearGradient(0, 0, 0, H);
-        g.addColorStop(0, '#000'); g.addColorStop(0.55, '#1c1205'); g.addColorStop(0.78, '#6b4a10'); g.addColorStop(1, '#0a0703');
+        g.addColorStop(0, '#000'); g.addColorStop(0.55, C.deep); g.addColorStop(0.78, C.mid); g.addColorStop(1, C.dark2);
         ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
         const sy = H * 0.76;
         g = ctx.createRadialGradient(W / 2, sy, 10, W / 2, sy, W * 0.7);
-        g.addColorStop(0, 'rgba(246,226,122,.9)'); g.addColorStop(0.12, 'rgba(212,175,55,.55)'); g.addColorStop(0.5, 'rgba(212,175,55,.08)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+        g.addColorStop(0, `rgba(${C.lrgb},.9)`); g.addColorStop(0.12, `rgba(${C.rgb},.55)`); g.addColorStop(0.5, `rgba(${C.rgb},.08)`); g.addColorStop(1, 'rgba(0,0,0,0)');
         ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
         const layer = (yb, amp, col) => {
           ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(0, H);
@@ -154,7 +164,7 @@ const Creative = (() => {
           for (let x = -s; x < W + s; x += s * 1.5) {
             const cx = x + (row % 2 ? s * 0.75 : 0);
             const d = Math.hypot(cx - W / 2, y - H / 2) / Math.max(W, H);
-            ctx.strokeStyle = `rgba(212,175,55,${Math.max(0.03, 0.28 - d * 0.45)})`;
+            ctx.strokeStyle = `rgba(${C.rgb},${Math.max(0.03, 0.28 - d * 0.45)})`;
             ctx.beginPath();
             for (let k = 0; k < 6; k++) {
               const a = (Math.PI / 3) * k;
@@ -174,7 +184,7 @@ const Creative = (() => {
         g.addColorStop(0, '#02140e'); g.addColorStop(0.5, '#000'); g.addColorStop(1, '#021a12');
         ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
         g = ctx.createRadialGradient(W * 0.85, H * 0.1, 10, W * 0.85, H * 0.1, W);
-        g.addColorStop(0, 'rgba(212,175,55,.25)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+        g.addColorStop(0, `rgba(${C.rgb},.25)`); g.addColorStop(1, 'rgba(0,0,0,0)');
         ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
         ctx.strokeStyle = goldGrad(ctx, 0, 0, W, H); ctx.lineWidth = 2;
         const m = 50, c = 70;
@@ -194,14 +204,14 @@ const Creative = (() => {
           const spread = 0.02 + rng() * 0.05;
           const len = H * 1.4;
           const g = ctx.createLinearGradient(ox, oy, ox + Math.cos(a) * len, oy + Math.sin(a) * len);
-          g.addColorStop(0, `rgba(241,217,139,${0.12 + rng() * 0.18})`); g.addColorStop(1, 'rgba(212,175,55,0)');
+          g.addColorStop(0, `rgba(${C.lrgb},${0.12 + rng() * 0.18})`); g.addColorStop(1, `rgba(${C.rgb},0)`);
           ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(ox, oy);
           ctx.lineTo(ox + Math.cos(a - spread) * len, oy + Math.sin(a - spread) * len);
           ctx.lineTo(ox + Math.cos(a + spread) * len, oy + Math.sin(a + spread) * len);
           ctx.fill();
         }
         for (let i = 0; i < 80; i++) {
-          ctx.fillStyle = `rgba(241,217,139,${rng() * 0.6})`;
+          ctx.fillStyle = `rgba(${C.lrgb},${rng() * 0.6})`;
           ctx.beginPath(); ctx.arc(rng() * W, rng() * H, rng() * 2.4, 0, Math.PI * 2); ctx.fill();
         }
         vignette(ctx, W, H, 0.6);
@@ -214,6 +224,32 @@ const Creative = (() => {
         ctx.strokeStyle = goldGrad(ctx, 0, 0, W, 0); ctx.lineWidth = 2;
         ctx.beginPath(); ctx.moveTo(W * 0.38, H * 0.08); ctx.lineTo(W * 0.62, H * 0.08); ctx.stroke();
         ctx.beginPath(); ctx.moveTo(W * 0.38, H * 0.92); ctx.lineTo(W * 0.62, H * 0.92); ctx.stroke();
+      },
+    },
+    {
+      id: 'branco', name: 'Branco Elegante', light: true,
+      draw(ctx, W, H) {
+        ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, W, H);
+        const g = ctx.createRadialGradient(W / 2, 0, 10, W / 2, 0, H * 0.9);
+        g.addColorStop(0, `rgba(${C.rgb},.14)`); g.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+        ctx.strokeStyle = goldGrad(ctx, 0, 0, W, H); ctx.lineWidth = 3;
+        ctx.strokeRect(40, 40, W - 80, H - 80);
+        ctx.lineWidth = 1; ctx.strokeStyle = `rgba(${C.rgb},.5)`;
+        ctx.strokeRect(56, 56, W - 112, H - 112);
+      },
+    },
+    {
+      id: 'papel', name: 'Papel & Grade', light: true,
+      draw(ctx, W, H) {
+        ctx.fillStyle = '#f7f4ec'; ctx.fillRect(0, 0, W, H);
+        ctx.strokeStyle = `rgba(${C.rgb},.12)`; ctx.lineWidth = 1;
+        for (let x = 0; x < W; x += 54) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+        for (let y = 0; y < H; y += 54) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+        ctx.strokeStyle = `rgba(${C.rgb},.45)`; ctx.lineWidth = 5; ctx.lineJoin = 'round';
+        ctx.beginPath(); ctx.moveTo(W * 0.08, H * 0.94);
+        [[0.25, 0.9], [0.4, 0.92], [0.58, 0.84], [0.72, 0.86], [0.9, 0.76]].forEach(([x, y]) => ctx.lineTo(W * x, H * y));
+        ctx.stroke();
       },
     },
   ];
@@ -242,10 +278,10 @@ const Creative = (() => {
   }
 
   function ornament(ctx, cx, y, w) {
-    ctx.strokeStyle = GOLD; ctx.lineWidth = 2;
+    ctx.strokeStyle = C.orn || C.a; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.moveTo(cx - w / 2, y); ctx.lineTo(cx - 22, y); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(cx + 22, y); ctx.lineTo(cx + w / 2, y); ctx.stroke();
-    ctx.fillStyle = GOLD;
+    ctx.fillStyle = C.orn || C.a;
     ctx.beginPath(); ctx.moveTo(cx, y - 12); ctx.lineTo(cx + 10, y); ctx.lineTo(cx, y + 12); ctx.lineTo(cx - 10, y); ctx.closePath(); ctx.fill();
   }
 
@@ -281,22 +317,26 @@ const Creative = (() => {
     const ctx = canvas.getContext('2d');
     const bg = backgrounds.find((b) => b.id === opts.bg) || backgrounds[0];
     bg.draw(ctx, W, H, mulberry32(opts.seed || 7));
+    const light = !!bg.light;
+    C.orn = light ? C.ink : C.a;
 
     // leve escurecimento central para leitura
-    const shade = ctx.createRadialGradient(W / 2, H / 2, 50, W / 2, H / 2, W * 0.75);
-    shade.addColorStop(0, 'rgba(0,0,0,.45)'); shade.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = shade; ctx.fillRect(0, 0, W, H);
+    if (!light) {
+      const shade = ctx.createRadialGradient(W / 2, H / 2, 50, W / 2, H / 2, W * 0.75);
+      shade.addColorStop(0, 'rgba(0,0,0,.45)'); shade.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = shade; ctx.fillRect(0, 0, W, H);
+    }
 
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     const cx = W / 2;
     const top = story ? 300 : 170;
 
     // Tag superior
-    ctx.fillStyle = GOLD_L;
+    ctx.fillStyle = light ? C.ink : C.l;
     ctx.font = '700 30px "Cinzel"';
     spaced(ctx, (opts.tag || 'PALAVRA DO DIA').toUpperCase(), cx, top, 8);
     if (opts.date) {
-      ctx.font = '600 26px "Cinzel"'; ctx.fillStyle = 'rgba(212,175,55,.75)';
+      ctx.font = '600 26px "Cinzel"'; ctx.fillStyle = light ? C.ink : `rgba(${C.rgb},.75)`;
       spaced(ctx, opts.date.toUpperCase(), cx, top + 50, 4);
     }
     ornament(ctx, cx, top + (opts.date ? 105 : 62), 300);
@@ -310,8 +350,8 @@ const Creative = (() => {
       font: (s) => `${opts.ref ? '600' : 'italic 600'} ${s}px "Cormorant Garamond"`,
     });
     ctx.font = `${opts.ref ? '600' : 'italic 600'} ${fit.size}px "Cormorant Garamond"`;
-    ctx.fillStyle = '#ffffff';
-    ctx.shadowColor = 'rgba(0,0,0,.6)'; ctx.shadowBlur = 18;
+    ctx.fillStyle = light ? '#111111' : '#ffffff';
+    ctx.shadowColor = 'rgba(0,0,0,.6)'; ctx.shadowBlur = light ? 0 : 18;
     const blockH = fit.lines.length * fit.lh;
     let y = boxTop + (boxBottom - boxTop - blockH) / 2 + fit.lh / 2;
     for (const line of fit.lines) { ctx.fillText(line, cx, y); y += fit.lh; }
@@ -320,17 +360,17 @@ const Creative = (() => {
     // Referência
     if (opts.ref) {
       ctx.font = '700 40px "Cinzel"';
-      ctx.fillStyle = goldGrad(ctx, cx - 200, 0, cx + 200, 0);
+      ctx.fillStyle = light ? C.ink : goldGrad(ctx, cx - 200, 0, cx + 200, 0);
       spaced(ctx, opts.ref.toUpperCase(), cx, y + 36, 3);
     }
 
     // Rodapé / marca
     const fy = H - (story ? 300 : 130);
-    ctx.fillStyle = GOLD;
+    ctx.fillStyle = light ? C.ink : C.a;
     ctx.font = '900 30px "Cinzel"';
     spaced(ctx, 'BÍBLIA DO EMPREENDEDOR', cx, fy, 6);
     if (opts.handle) {
-      ctx.font = '600 26px "Inter", sans-serif'; ctx.fillStyle = 'rgba(241,217,139,.8)';
+      ctx.font = '600 26px "Inter", sans-serif'; ctx.fillStyle = light ? '#333' : `rgba(${C.lrgb},.8)`;
       ctx.fillText(opts.handle, cx, fy + 46);
     }
     return canvas;
@@ -344,5 +384,5 @@ const Creative = (() => {
     ctx.restore();
   }
 
-  return { backgrounds, render, thumb, ensureFonts, mulberry32 };
+  return { backgrounds, render, thumb, ensureFonts, mulberry32, setAccent, mix, hexRgb };
 })();

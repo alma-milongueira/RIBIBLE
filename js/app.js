@@ -10,7 +10,7 @@
     almeida: { short: 'ALM', name: 'João Ferreira de Almeida' },
   };
   const defaults = {
-    settings: { apiKey: '', model: 'gemini-flash-latest', translation: 'kjv', goal: 3, handle: '', aiPosts: true, fontSize: 21 },
+    settings: { apiKey: '', model: 'gemini-flash-latest', translation: 'kjv', goal: 3, handle: '', aiPosts: true, fontSize: 21, theme: 'dark', accent: '#d4af37' },
     read: {},          // { GEN: [1,2,3] }
     readLog: {},       // { '2026-11-02': 3 }
     last: { book: 'GEN', ch: 1 },
@@ -50,6 +50,45 @@
     t.classList.add('show');
     clearTimeout(toast._t);
     toast._t = setTimeout(() => t.classList.remove('show'), 2200);
+  }
+
+  // ================= Tema e cores =================
+  const ACCENTS = [
+    { c: '#d4af37', n: 'Dourado' }, { c: '#c0c0c0', n: 'Prata' }, { c: '#e8a59a', n: 'Rosé' },
+    { c: '#cd7f32', n: 'Bronze' }, { c: '#3fa7ff', n: 'Azul' }, { c: '#2ecc71', n: 'Esmeralda' },
+    { c: '#e0115f', n: 'Rubi' }, { c: '#9b6dff', n: 'Roxo' },
+  ];
+  function lum(hex) {
+    const [r, g, b] = Creative.hexRgb(hex).map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  }
+  function applyTheme() {
+    const acc = /^#[0-9a-f]{6}$/i.test(S.settings.accent) ? S.settings.accent : '#d4af37';
+    const light = S.settings.theme === 'light';
+    const root = document.documentElement;
+    root.dataset.theme = light ? 'light' : 'dark';
+    let text = acc;
+    if (light) { for (let t = 0.2; lum(text) > 0.16 && t < 0.95; t += 0.08) text = Creative.mix(acc, '#000000', t); }
+    else { for (let t = 0.15; lum(text) < 0.28 && t < 0.95; t += 0.08) text = Creative.mix(acc, '#ffffff', t); }
+    const lightV = Creative.mix(acc, '#ffffff', 0.45), darkV = Creative.mix(acc, '#000000', 0.38);
+    root.style.setProperty('--gold', text);
+    root.style.setProperty('--gold-light', light ? Creative.mix(text, '#000000', 0.55) : Creative.mix(text, '#ffffff', 0.45));
+    root.style.setProperty('--acc-rgb', Creative.hexRgb(text).join(', '));
+    root.style.setProperty('--grad', `linear-gradient(135deg, ${lightV} 0%, ${acc} 45%, ${darkV} 100%)`);
+    root.style.setProperty('--on-acc', lum(acc) > 0.35 ? '#111' : '#fff');
+    document.querySelector('meta[name=theme-color]')?.setAttribute('content', light ? '#ffffff' : '#000000');
+    Creative.setAccent(acc);
+  }
+  applyTheme();
+  document.getElementById('theme-toggle')?.addEventListener('click', () => {
+    S.settings.theme = S.settings.theme === 'light' ? 'dark' : 'light';
+    save(); applyTheme(); go(current, { keepScroll: true });
+  });
+
+  // ================= Compartilhar =================
+  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  function waText(text) {
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener');
   }
 
   function openSheet(html) {
@@ -136,11 +175,11 @@
   function ring(pct) {
     const r = 40, c = 2 * Math.PI * r;
     return `<svg class="ring" viewBox="0 0 100 100">
-      <defs><linearGradient id="rg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f6e27a"/><stop offset=".5" stop-color="#d4af37"/><stop offset="1" stop-color="#9c7419"/></linearGradient></defs>
-      <circle cx="50" cy="50" r="${r}" fill="none" stroke="rgba(212,175,55,.14)" stroke-width="8"/>
+      <defs><linearGradient id="rg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" style="stop-color:var(--gold-light)"/><stop offset="1" style="stop-color:var(--gold)"/></linearGradient></defs>
+      <circle cx="50" cy="50" r="${r}" fill="none" style="stroke:rgba(var(--acc-rgb),.14)" stroke-width="8"/>
       <circle cx="50" cy="50" r="${r}" fill="none" stroke="url(#rg)" stroke-width="8" stroke-linecap="round"
         stroke-dasharray="${c}" stroke-dashoffset="${c * (1 - pct / 100)}" transform="rotate(-90 50 50)"/>
-      <text x="50" y="55" text-anchor="middle" fill="#f1d98b" font-size="18" font-weight="700">${pct < 10 ? pct.toFixed(1) : Math.round(pct)}%</text>
+      <text x="50" y="55" text-anchor="middle" style="fill:var(--gold-light)" font-size="18" font-weight="700">${pct < 10 ? pct.toFixed(1) : Math.round(pct)}%</text>
     </svg>`;
   }
 
@@ -226,6 +265,7 @@
         <div class="row wrap" style="margin-top:14px">
           <button class="btn sm" data-act="open-ch" data-book="${d.book}" data-ch="${d.ch}">Ler capítulo</button>
           <button class="btn sm" data-act="post-daily">Criar post</button>
+          <button class="btn sm wa" data-act="wa-daily">WhatsApp</button>
           <button class="btn sm" data-act="copy-daily">Copiar</button>
         </div>
       </div>
@@ -258,6 +298,7 @@
         <p style="margin:0;color:var(--gold-light)">${esc(w.mensagem)}</p>
         <div class="row wrap" style="margin-top:14px">
           <button class="btn sm" data-act="open-ch" data-book="${w.book}" data-ch="${w.ch}">Ler capítulo</button>
+          <button class="btn sm wa" data-act="wa-weekly">WhatsApp</button>
         </div>
       </div>
 
@@ -296,6 +337,8 @@
     const d = pick(DAILY, dayNum());
     switch (a.dataset.act) {
       case 'open-ch': openChapter(a.dataset.book, +a.dataset.ch); break;
+      case 'wa-daily': waText(`✦ *Mensagem do dia*\n\n“${d.texto}”\n— ${d.ref}\n\n${d.reflexao}\n\n👉 ${d.acao}\n\n_Bíblia do Empreendedor_`); break;
+      case 'wa-weekly': { const w = pick(WEEKLY, weekNum()); waText(`✦ *${w.titulo}*\n\n“${w.texto}”\n— ${w.ref}\n\n${w.mensagem}\n\n_Bíblia do Empreendedor_`); break; }
       case 'copy-daily': copy(`“${d.texto}” — ${d.ref}\n\n${d.reflexao}\n\n— Bíblia do Empreendedor`); break;
       case 'post-daily': setCreative({ quote: d.texto, ref: d.ref, tag: 'Palavra do Dia', caption: buildCaption(d.texto, d.ref, d.reflexao), source: 'diaria' }); go('create'); break;
       case 'ask': askMentor(a.dataset.q); break;
@@ -428,6 +471,7 @@
       <div class="mini-verse"><p>${esc(verse.t)}</p><div class="verse-ref">${esc(ref)} · ${TRANSLATIONS[S.settings.translation].short}</div></div>
       <div class="action-list">
         <button data-va="copy">📋 Copiar versículo</button>
+        <button data-va="wa">🟢 Enviar no WhatsApp</button>
         <button data-va="post">🖼️ Criar post / stories com este versículo</button>
         <button data-va="explain">✨ Explicar com o Mentor IA</button>
         <button data-va="business">💼 Como aplicar no meu negócio?</button>
@@ -440,6 +484,7 @@
       const trName = TRANSLATIONS[S.settings.translation].name;
       switch (btn.dataset.va) {
         case 'copy': copy(`“${verse.t}” — ${ref} (${TRANSLATIONS[S.settings.translation].short})`); break;
+        case 'wa': waText(`“${verse.t}”\n— *${ref}* (${TRANSLATIONS[S.settings.translation].short})\n\n_Bíblia do Empreendedor_`); break;
         case 'post': setCreative({ quote: verse.t, ref, tag: 'Palavra do Dia', caption: buildCaption(verse.t, ref), source: 'versiculo' }); go('create'); break;
         case 'explain': askMentor(`Explique ${ref} (${trName}): "${verse.t}". Traga o contexto, o significado e uma aplicação prática.`); break;
         case 'business': askMentor(`Como aplicar ${ref} ("${verse.t}") na minha vida de empreendedor? Dê passos práticos.`); break;
@@ -622,7 +667,7 @@ Regras:
       <div class="chips" style="margin-bottom:14px">${S.chat.length ? '<button class="chip" data-act="clear">🗑 Nova conversa</button>' : ''}${chips.map((c) => `<button class="chip" data-q="${esc(c)}">${esc(c)}</button>`).join('')}</div>
       <div class="chat" id="chat">
         ${S.chat.length === 0 ? `<div class="msg ai"><p>Paz, empreendedor! Sou seu mentor bíblico. Pergunte sobre <strong>decisões, liderança, finanças, propósito</strong> ou peça a explicação de qualquer passagem. 🙏</p></div>` : ''}
-        ${S.chat.map((m) => `<div class="msg ${m.role === 'user' ? 'user' : 'ai'}">${m.role === 'user' ? esc(m.text).replace(/\n/g, '<br>') : md(m.text)}</div>`).join('')}
+        ${S.chat.map((m, i) => `<div class="msg ${m.role === 'user' ? 'user' : 'ai'}">${m.role === 'user' ? esc(m.text).replace(/\n/g, '<br>') : md(m.text) + (m.error ? '' : `<div style="margin-top:8px"><button class="chip" data-wa-msg="${i}" style="padding:5px 10px;font-size:12px">Enviar no WhatsApp</button></div>`)}</div>`).join('')}
         ${mentorBusy ? '<div class="msg ai typing"><span></span><span></span><span></span></div>' : ''}
       </div>
     `;
@@ -649,6 +694,8 @@ Regras:
     $('#mentor-send').onclick = submit;
   }
   $('#view-mentor').addEventListener('click', (e) => {
+    const wm = e.target.closest('[data-wa-msg]');
+    if (wm) { waText(`${S.chat[+wm.dataset.waMsg].text}\n\n_Mentor · Bíblia do Empreendedor_`); return; }
     const c = e.target.closest('[data-q]');
     if (c) { if (S.settings.apiKey) sendMentor(c.dataset.q); else { $('#mentor-input').value = c.dataset.q; toast('Ative o Mentor com sua chave gratuita'); } return; }
     const a = e.target.closest('[data-act]');
@@ -739,10 +786,14 @@ Responda SOMENTE em JSON: {"texto": "no máximo 170 caracteres", "referencia": "
       <div class="section-title">Fundo</div>
       <div class="bg-picker">${Creative.backgrounds.map((b) => `<button class="bg-thumb ${c.bg === b.id ? 'active' : ''}" data-bg="${b.id}" title="${esc(b.name)}"><canvas data-thumb="${b.id}"></canvas></button>`).join('')}</div>
       <div class="row wrap" style="margin-top:6px">
-        <button class="btn primary" data-act="share" style="flex:1">Compartilhar</button>
+        <button class="btn ig" data-act="story" style="flex:1">📲 Postar no Stories</button>
+        <button class="btn wa" data-act="wa" style="flex:1"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm5.8 14.1c-.2.7-1.4 1.3-2 1.4-.5.1-1.2.1-1.9-.1-.4-.1-1-.3-1.7-.6-3-1.3-4.9-4.3-5.1-4.5-.1-.2-1.2-1.6-1.2-3.1s.8-2.2 1-2.5c.3-.3.6-.4.8-.4h.6c.2 0 .4 0 .6.5l.9 2.1c.1.1.1.3 0 .5l-.3.5-.4.5c-.1.1-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.2 1 2.1 1.4 2.4 1.5.3.1.5.1.6-.1l.9-1.1c.2-.3.4-.2.6-.1l2 .9c.3.1.5.2.5.3.1.1.1.7-.1 1.4z"/></svg> WhatsApp</button>
+      </div>
+      <div class="row wrap" style="margin-top:10px">
+        <button class="btn" data-act="share" style="flex:1">Compartilhar</button>
         <button class="btn" data-act="download" style="flex:1">Baixar ${createState.format === 'post' ? 'post' : 'stories'}</button>
       </div>
-      <button class="btn block" data-act="download-both" style="margin-top:10px">⬇ Baixar post + stories</button>
+      <button class="btn block ghost" data-act="download-both" style="margin-top:10px">⬇ Baixar post + stories</button>
       <div class="section-title">Texto</div>
       <div class="row wrap">
         <button class="btn sm" data-act="ai" ${createState.busy ? 'disabled' : ''}>${createState.busy ? 'Criando…' : '✨ Gerar com IA'}</button>
@@ -831,6 +882,34 @@ Responda SOMENTE em JSON: {"texto": "no máximo 170 caracteres", "referencia": "
         } else { download(blob, file.name); copy(c.caption); toast('Imagem salva e legenda copiada'); }
         break;
       }
+      case 'story': {
+        // gera sempre no formato 9:16 e abre o compartilhamento (Instagram → Stories)
+        const blob = await canvasBlob('story');
+        const file = new File([blob], fileName('story'), { type: 'image/png' });
+        await copy(c.caption);
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          toast('Escolha Instagram → Stories');
+          try { await navigator.share({ files: [file] }); } catch { /* cancelado */ }
+        } else {
+          download(blob, file.name);
+          toast('Stories salvo! Abra o Instagram e poste');
+          if (isMobile) setTimeout(() => { location.href = 'instagram://story-camera'; }, 900);
+        }
+        break;
+      }
+      case 'wa': {
+        const blob = await canvasBlob(createState.format);
+        const file = new File([blob], fileName(createState.format), { type: 'image/png' });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          toast('Escolha o WhatsApp');
+          try { await navigator.share({ files: [file], text: c.caption }); } catch { /* cancelado */ }
+        } else {
+          download(blob, file.name);
+          waText(c.caption);
+          toast('Imagem salva — anexe no WhatsApp');
+        }
+        break;
+      }
       case 'copy-caption': copy(c.caption); break;
       case 'ai': runAI(false); break;
       case 'proverb': {
@@ -890,6 +969,22 @@ Responda SOMENTE em JSON: {"texto": "no máximo 170 caracteres", "referencia": "
       <h1 class="page-title">Ajustes</h1>
       <p class="page-sub">Tudo fica salvo apenas neste aparelho.</p>
 
+      <div class="section-title">Aparência</div>
+      <div class="card">
+        <div class="field"><label>Tema</label>
+          <div class="theme-pick">
+            <button class="theme-opt ${s.theme !== 'light' ? 'active' : ''}" data-theme-opt="dark"><div class="pv" style="background:#000;color:#fff;border:1px solid #333">Aa</div>Preto</button>
+            <button class="theme-opt ${s.theme === 'light' ? 'active' : ''}" data-theme-opt="light"><div class="pv" style="background:#fff;color:#111;border:1px solid #ddd">Aa</div>Branco</button>
+          </div>
+        </div>
+        <div class="field" style="margin:0"><label>Cor do app e dos posts</label>
+          <div class="swatches">
+            ${ACCENTS.map((a) => `<button class="swatch ${s.accent.toLowerCase() === a.c ? 'active' : ''}" data-accent="${a.c}" title="${a.n}" style="background:${a.c}"></button>`).join('')}
+            <label class="swatch swatch-custom ${ACCENTS.some((a) => a.c === s.accent.toLowerCase()) ? '' : 'active'}" title="Cor personalizada"><input type="color" id="st-color" value="${esc(s.accent)}"></label>
+          </div>
+        </div>
+      </div>
+
       <div class="section-title">Inteligência artificial</div>
       <div class="card">
         <div class="field">
@@ -936,7 +1031,16 @@ Responda SOMENTE em JSON: {"texto": "no máximo 170 caracteres", "referencia": "
       <p class="small muted" style="text-align:center;margin-top:20px">Bíblia do Empreendedor · Texto bíblico KJV (domínio público) via bible-api.com</p>
     `;
   }
+  $('#view-settings').addEventListener('input', (e) => {
+    if (e.target.id !== 'st-color') return;
+    S.settings.accent = e.target.value; save(); applyTheme();
+    document.querySelectorAll('.swatch').forEach((x) => x.classList.toggle('active', x.classList.contains('swatch-custom')));
+  });
   $('#view-settings').addEventListener('click', async (e) => {
+    const th = e.target.closest('[data-theme-opt]');
+    if (th) { S.settings.theme = th.dataset.themeOpt; save(); applyTheme(); renderSettings(); return; }
+    const ac = e.target.closest('[data-accent]');
+    if (ac) { S.settings.accent = ac.dataset.accent; save(); applyTheme(); renderSettings(); toast('Cor aplicada'); return; }
     const a = e.target.closest('[data-act]');
     if (!a) return;
     const s = S.settings;
@@ -976,7 +1080,7 @@ Responda SOMENTE em JSON: {"texto": "no máximo 170 caracteres", "referencia": "
       const data = JSON.parse(await e.target.files[0].text());
       if (!data.settings) throw new Error();
       localStorage.setItem(KEY, JSON.stringify(data));
-      S = load(); toast('Backup importado'); renderSettings();
+      S = load(); applyTheme(); toast('Backup importado'); renderSettings();
     } catch { toast('Arquivo inválido'); }
   });
 
