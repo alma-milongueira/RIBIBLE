@@ -400,12 +400,16 @@ h1, h2, h3 { font-family: var(--display); font-weight: 800; color: var(--gold-li
 .mini-seg button { padding: 6px 10px; border-radius: 9px; font-family: var(--display); font-weight: 700; font-size: 12.5px; color: var(--gold-dim); white-space: nowrap; }
 .mini-seg button.active { background: rgba(var(--acc-rgb), .16); color: var(--gold); box-shadow: inset 0 0 0 1px rgba(var(--acc-rgb), .45); }
 .chips.mini .chip { padding: 6px 10px; font-size: 12px; border-radius: 10px; }
-.studio-preview {
-  position: sticky; top: calc(var(--top-h) + env(safe-area-inset-top)); z-index: 6;
-  display: flex; justify-content: center; padding: 6px 0 8px; margin: 0 -16px; background: var(--bg);
-  border-bottom: 1px solid var(--border);
+.studio-preview { flex: none; display: flex; justify-content: center; padding: 4px 0 10px; border-bottom: 1px solid var(--border); }
+.studio-preview canvas { height: 34dvh; max-height: 360px; width: auto; max-width: 100%; border-radius: 12px; border: 1px solid var(--border-2); box-shadow: 0 12px 30px rgba(0, 0, 0, .45); }
+/* Estúdio: prévia parada em cima e só os controles rolam (sem sobreposição) */
+#view-create.active {
+  display: flex; flex-direction: column;
+  height: calc(100dvh - var(--top-h) - env(safe-area-inset-top) - 22px - var(--tabbar-h) - env(safe-area-inset-bottom) - 34px);
+  overflow: hidden;
 }
-.studio-preview canvas { height: 40vh; max-height: 420px; width: auto; max-width: calc(100% - 32px); border-radius: 12px; border: 1px solid var(--border-2); box-shadow: 0 16px 40px rgba(0, 0, 0, .45); }
+#view-create > .studio-top, #view-create > .chips { flex: none; }
+.studio-scroll { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; margin: 0 -16px; padding: 0 16px; }
 .studio-panel { padding-top: 10px; display: grid; gap: 8px; }
 .ctl-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .mbtn {

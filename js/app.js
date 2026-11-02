@@ -1145,6 +1145,7 @@ Responda SOMENTE em JSON: {"frase": "mensagem de bom dia curta e marcante para a
 
       <div class="studio-preview ${createState.format === 'story' ? 'story' : ''}"><canvas id="cv"></canvas></div>
 
+      <div class="studio-scroll">
       <div class="studio-panel">
         <button class="btn primary block magic" data-act="ai-art" ${createState.artBusy ? 'disabled' : ''}>${createState.artBusy ? `⏳ ${esc(createState.artStep || 'Criando arte…')}` : '🪄 Arte com IA'}</button>
         <div class="ctl-row">
@@ -1188,6 +1189,8 @@ Responda SOMENTE em JSON: {"frase": "mensagem de bom dia curta e marcante para a
         <button class="mbtn" data-act="download-both">⬇ Post + stories</button>
       </div>
       ${!hasAI() ? '<p class="notice" style="margin-top:16px">Dica: adicione sua chave gratuita do Gemini em Ajustes para que a IA crie textos e fotos novos todos os dias.</p>' : ''}
+      <div style="height:24px"></div>
+      </div>
     `;
     Creative.ensureFonts().then(async () => {
       if (photoStyle) await loadPhoto(createState.mode);
