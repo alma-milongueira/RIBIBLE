@@ -10,7 +10,7 @@
     almeida: { short: 'ALM', name: 'João Ferreira de Almeida' },
   };
   const defaults = {
-    settings: { apiKey: '', model: 'gemini-flash-latest', translation: 'kjv', goal: 3, handle: '', aiPosts: true, fontSize: 21, theme: 'dark', accent: '#d4af37' },
+    settings: { apiKey: '', model: 'gemini-2.5-flash', translation: 'kjv', goal: 3, handle: '', aiPosts: true, fontSize: 21, theme: 'dark', accent: '#d4af37' },
     read: {},          // { GEN: [1,2,3] }
     readLog: {},       // { '2026-11-02': 3 }
     last: { book: 'GEN', ch: 1 },
@@ -19,6 +19,8 @@
     creative: null,    // { date, quote, ref, tag, caption, source, bg }
   };
   let S = load();
+  // versões antigas usavam o modelo mais lento como padrão
+  if (S.settings.model === 'gemini-flash-latest' && !S.settings.modelChosen) S.settings.model = 'gemini-2.5-flash';
 
   function load() {
     try {
@@ -632,30 +634,76 @@ Regras:
 - Incentive oração, comunhão e o conselho de pastores e mentores. Para questões jurídicas, contábeis, médicas ou de saúde emocional, recomende também um profissional.
 - Seja conciso (até ~250 palavras), use parágrafos curtos, listas e **negrito** quando ajudar. Termine, quando fizer sentido, com uma oração curta.`;
 
-  async function gemini(contents, { system = SYSTEM_MENTOR, json = false, temperature = 0.8 } = {}) {
+  // Modelos gratuitos do Gemini (mais rápido → mais elaborado)
+  const MODELS = [
+    { id: 'gemini-2.5-flash-lite', name: '⚡ Ultra rápido — Flash-Lite' },
+    { id: 'gemini-2.5-flash', name: '🚀 Rápido e inteligente — Flash (recomendado)' },
+    { id: 'gemini-flash-latest', name: '🧠 Mais recente — pode demorar mais' },
+  ];
+  const DEFAULT_MODEL = 'gemini-2.5-flash';
+
+  // Desliga/reduz o "raciocínio" do modelo, que é o que deixa a resposta lenta
+  function thinkingFor(model) {
+    if (/pro/i.test(model)) return null;
+    if (/2\.5/.test(model)) return { thinkingBudget: 0 };
+    return { thinkingLevel: 'low' };
+  }
+
+  async function gemini(contents, { system = SYSTEM_MENTOR, json = false, temperature = 0.8, onChunk = null, maxTokens = 1200 } = {}) {
     const key = S.settings.apiKey.trim();
     if (!key) throw new Error('NO_KEY');
-    const call = async (model) => {
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`, {
+    const call = async (model, useThinking = true) => {
+      const think = useThinking ? thinkingFor(model) : null;
+      const stream = !!onChunk;
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:${stream ? 'streamGenerateContent?alt=sse&' : 'generateContent?'}key=${encodeURIComponent(key)}`;
+      const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           systemInstruction: { parts: [{ text: system }] },
           contents,
-          generationConfig: { temperature, ...(json ? { responseMimeType: 'application/json' } : {}) },
+          generationConfig: {
+            temperature, maxOutputTokens: maxTokens,
+            ...(json ? { responseMimeType: 'application/json' } : {}),
+            ...(think ? { thinkingConfig: think } : {}),
+          },
         }),
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) { const err = new Error(data.error?.message || `Erro ${res.status}`); err.status = res.status; throw err; }
-      const text = (data.candidates?.[0]?.content?.parts || []).map((p) => p.text || '').join('').trim();
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        const err = new Error(data.error?.message || `Erro ${res.status}`); err.status = res.status; throw err;
+      }
+      const partsText = (d) => (d.candidates?.[0]?.content?.parts || []).filter((p) => !p.thought).map((p) => p.text || '').join('');
+      let text = '';
+      if (stream && res.body) {
+        const reader = res.body.getReader();
+        const dec = new TextDecoder();
+        let buf = '';
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += dec.decode(value, { stream: true });
+          let i;
+          while ((i = buf.indexOf('\n')) >= 0) {
+            const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1);
+            if (!line.startsWith('data:')) continue;
+            try { text += partsText(JSON.parse(line.slice(5))); onChunk(text); } catch { /* linha parcial */ }
+          }
+        }
+      } else {
+        text = partsText(await res.json());
+      }
+      text = text.trim();
       if (!text) throw new Error('A IA não retornou resposta. Tente reformular.');
       return text;
     };
-    const model = S.settings.model.trim() || 'gemini-flash-latest';
+    const model = S.settings.model.trim() || DEFAULT_MODEL;
     try { return await call(model); }
     catch (e) {
+      // modelo não aceita a configuração de raciocínio → tenta sem ela
+      if (e.status === 400 && /think/i.test(e.message)) return call(model, false);
       // modelo indisponível → tenta um modelo gratuito alternativo
-      if (e.status === 404 && model !== 'gemini-2.5-flash') return call('gemini-2.5-flash');
+      if (e.status === 404 && model !== DEFAULT_MODEL) return call(DEFAULT_MODEL);
       throw e;
     }
   }
@@ -676,8 +724,17 @@ Regras:
     renderMentor({ keepScroll: true });
     scrollChat();
     try {
-      const contents = S.chat.slice(-16).map((m) => ({ role: m.role, parts: [{ text: m.text }] }));
-      const reply = await gemini(contents);
+      const contents = S.chat.slice(-10).map((m) => ({ role: m.role, parts: [{ text: m.text }] }));
+      let last = 0;
+      const reply = await gemini(contents, {
+        onChunk: (t) => {
+          const el = document.getElementById('stream-msg');
+          if (!el || Date.now() - last < 60) return;
+          last = Date.now();
+          el.classList.remove('typing'); el.innerHTML = md(t);
+          if (window.innerHeight + window.scrollY > document.body.scrollHeight - 220) window.scrollTo({ top: document.body.scrollHeight });
+        },
+      });
       S.chat.push({ role: 'model', text: reply });
     } catch (e) {
       S.chat.push({ role: 'model', text: `⚠️ ${e.message === 'NO_KEY' ? 'Configure sua chave gratuita do Gemini em Ajustes.' : 'Não consegui responder agora: ' + e.message}`, error: true });
@@ -710,7 +767,7 @@ Regras:
       <div class="chat" id="chat">
         ${S.chat.length === 0 ? `<div class="msg ai"><p>Paz, empreendedor! Sou seu mentor bíblico. Pergunte sobre <strong>decisões, liderança, finanças, propósito</strong> ou peça a explicação de qualquer passagem. 🙏</p></div>` : ''}
         ${S.chat.map((m, i) => `<div class="msg ${m.role === 'user' ? 'user' : 'ai'}">${m.role === 'user' ? esc(m.text).replace(/\n/g, '<br>') : md(m.text) + (m.error ? '' : `<div style="margin-top:8px"><button class="chip" data-wa-msg="${i}" style="padding:5px 10px;font-size:12px">Enviar no WhatsApp</button></div>`)}</div>`).join('')}
-        ${mentorBusy ? '<div class="msg ai typing"><span></span><span></span><span></span></div>' : ''}
+        ${mentorBusy ? '<div class="msg ai typing" id="stream-msg"><span></span><span></span><span></span></div>' : ''}
       </div>
     `;
     const prevDraft = $('#mentor-input')?.value || '';
@@ -1034,7 +1091,8 @@ Responda SOMENTE em JSON: {"texto": "no máximo 170 caracteres", "referencia": "
         </div>
         <div class="field">
           <label>Modelo</label>
-          <input id="st-model" value="${esc(s.model)}" placeholder="gemini-flash-latest">
+          <select id="st-model">${MODELS.map((m) => `<option value="${m.id}" ${s.model === m.id ? 'selected' : ''}>${esc(m.name)}</option>`).join('')}
+            ${MODELS.some((m) => m.id === s.model) ? '' : `<option value="${esc(s.model)}" selected>${esc(s.model)}</option>`}</select>
         </div>
         <label class="switch">Criar o post do dia com IA automaticamente<input type="checkbox" id="st-aiposts" ${s.aiPosts ? 'checked' : ''}></label>
         <button class="btn sm" data-act="test">Testar conexão</button>
@@ -1086,7 +1144,8 @@ Responda SOMENTE em JSON: {"texto": "no máximo 170 caracteres", "referencia": "
     const s = S.settings;
     const collect = () => {
       s.apiKey = $('#st-key').value.trim();
-      s.model = $('#st-model').value.trim() || 'gemini-flash-latest';
+      if (s.model !== $('#st-model').value) s.modelChosen = true;
+      s.model = $('#st-model').value || DEFAULT_MODEL;
       s.aiPosts = $('#st-aiposts').checked;
       if (s.translation !== $('#st-tr').value) { s.translation = $('#st-tr').value; reader = { verses: null, loading: false, error: null, sel: null }; }
       s.goal = +$('#st-goal').value;
