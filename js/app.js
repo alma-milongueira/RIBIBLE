@@ -11,7 +11,7 @@
     almeida: { short: 'ALM', name: 'João Ferreira de Almeida' },
   };
   const defaults = {
-    settings: { apiKey: '', claudeKey: '', provider: 'gemini', model: 'gemini-2.5-flash', translation: 'kjv', goal: 3, handle: '', aiPosts: true, fontSize: 21, theme: 'dark', accent: '#d4af37' },
+    settings: { apiKey: '', claudeKey: '', provider: 'gemini', model: 'gemini-flash-latest', translation: 'kjv', goal: 3, handle: '', aiPosts: true, fontSize: 21, theme: 'dark', accent: '#d4af37' },
     read: {},          // { GEN: [1,2,3] }
     readLog: {},       // { '2026-11-02': 3 }
     last: { book: 'GEN', ch: 1 },
@@ -21,7 +21,9 @@
   };
   let S = load();
   // versões antigas usavam o modelo mais lento como padrão
-  if (S.settings.model === 'gemini-flash-latest' && !S.settings.modelChosen) S.settings.model = 'gemini-2.5-flash';
+  // família Gemini 2.5 foi desativada pelo Google → migra para os apelidos atuais
+  if (/^gemini-2\.5-flash-lite/.test(S.settings.model)) S.settings.model = 'gemini-flash-lite-latest';
+  else if (/^gemini-2\.5/.test(S.settings.model)) S.settings.model = 'gemini-flash-latest';
 
   function load() {
     try {
@@ -637,17 +639,32 @@ Regras:
 
   // Modelos gratuitos do Gemini (mais rápido → mais elaborado)
   const MODELS = [
-    { id: 'gemini-2.5-flash-lite', name: '⚡ Ultra rápido — Flash-Lite' },
-    { id: 'gemini-2.5-flash', name: '🚀 Rápido e inteligente — Flash (recomendado)' },
-    { id: 'gemini-flash-latest', name: '🧠 Mais recente — pode demorar mais' },
+    // apelidos "-latest" sempre apontam para a versão atual do Google (não quebram quando uma versão é desativada)
+    { id: 'gemini-flash-lite-latest', name: '⚡ Ultra rápido — Flash-Lite' },
+    { id: 'gemini-flash-latest', name: '🚀 Rápido e inteligente — Flash (recomendado)' },
   ];
-  const DEFAULT_MODEL = 'gemini-2.5-flash';
+  const DEFAULT_MODEL = 'gemini-flash-latest';
 
   // Desliga/reduz o "raciocínio" do modelo, que é o que deixa a resposta lenta
   function thinkingFor(model) {
     if (/pro/i.test(model)) return null;
     if (/2\.5/.test(model)) return { thinkingBudget: 0 };
-    return { thinkingLevel: 'low' };
+    return { thinkingLevel: 'minimal' };
+  }
+
+  // Se um modelo for desativado pelo Google, descobre o Flash mais novo disponível para a chave
+  async function discoverModel(key, lite) {
+    try {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?pageSize=200&key=${encodeURIComponent(key)}`);
+      if (!res.ok) return null;
+      const list = ((await res.json()).models || [])
+        .filter((m) => (m.supportedGenerationMethods || []).includes('generateContent'))
+        .map((m) => m.name.replace(/^models\//, ''))
+        .filter((n) => /^gemini-[\d.]+-flash(-lite)?$/.test(n) && n.includes('lite') === lite);
+      const ver = (n) => parseFloat(n.match(/gemini-([\d.]+)/)[1]);
+      list.sort((a, b) => ver(b) - ver(a));
+      return list[0] || null;
+    } catch { return null; }
   }
 
   // ---------- Claude Haiku 5.5 (Anthropic, SDK oficial) ----------
@@ -743,14 +760,33 @@ Regras:
       if (!text) throw new Error('A IA não retornou resposta. Tente reformular.');
       return text;
     };
+    const callSafe = async (m) => {
+      try { return await call(m); }
+      catch (e) {
+        // modelo não aceita a configuração de raciocínio → tenta sem ela
+        if (e.status === 400 && /think/i.test(e.message)) return call(m, false);
+        throw e;
+      }
+    };
     const model = S.settings.model.trim() || DEFAULT_MODEL;
-    try { return await call(model); }
+    try { return await callSafe(model); }
     catch (e) {
-      // modelo não aceita a configuração de raciocínio → tenta sem ela
-      if (e.status === 400 && /think/i.test(e.message)) return call(model, false);
-      // modelo indisponível → tenta um modelo gratuito alternativo
-      if (e.status === 404 && model !== DEFAULT_MODEL) return call(DEFAULT_MODEL);
-      throw e;
+      const gone = e.status === 404 || /no longer available|not found|not supported|deprecated|retired/i.test(e.message);
+      if (!gone) throw e;
+      // modelo desativado → usa o apelido atual ou descobre o mais novo disponível
+      const lite = /lite/.test(model);
+      const candidates = [lite ? 'gemini-flash-lite-latest' : 'gemini-flash-latest'];
+      const found = await discoverModel(key, lite);
+      if (found) candidates.push(found);
+      for (const alt of candidates) {
+        if (alt === model) continue;
+        try {
+          const r = await callSafe(alt);
+          S.settings.model = alt; save();
+          return r;
+        } catch (e2) { /* tenta o próximo */ }
+      }
+      throw new Error('O modelo do Gemini escolhido foi desativado pelo Google e nenhum substituto respondeu. Tente outro modelo em Ajustes.');
     }
   }
 
