@@ -425,3 +425,7 @@ h1, h2, h3 { font-family: var(--display); font-weight: 800; color: var(--gold-li
 .sl-row input[type=range] { flex: 1; padding: 0; border: 0; background: none; accent-color: var(--gold); height: 22px; box-shadow: none; }
 .sl-val { font-family: var(--display); font-weight: 700; font-size: 12px; color: var(--gold); width: 40px; text-align: right; flex: none; }
 .bg-picker.mini .bg-thumb { width: 44px; height: 44px; border-radius: 11px; }
+
+.btn.magic { padding: 11px 14px; font-size: 14px; border-radius: 14px; white-space: normal; min-width: 0; }
+.studio-panel, .studio-panel > * { min-width: 0; }
+#view-create { overflow-x: hidden; }

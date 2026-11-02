@@ -1111,6 +1111,7 @@ Responda SOMENTE em JSON: {"frase": "mensagem de bom dia curta e marcante para a
   const tint = () => S.settings.photoTint || 'dark';
   const tintAmount = () => (S.settings.photoTintAmount ?? 35);
   const textScale = () => (S.settings.textScale ?? 100);
+  const textFont = () => S.settings.textFont || (effStyle() === 'photo' ? 'hand' : 'serif');
   const cardTint = () => (S.settings.cardTint ?? 10);
   const cardBlur = () => (S.settings.cardBlur ?? 40);
   const cardOpacity = () => (S.settings.cardOpacity ?? 93);
@@ -1145,6 +1146,7 @@ Responda SOMENTE em JSON: {"frase": "mensagem de bom dia curta e marcante para a
       <div class="studio-preview ${createState.format === 'story' ? 'story' : ''}"><canvas id="cv"></canvas></div>
 
       <div class="studio-panel">
+        <button class="btn primary block magic" data-act="ai-art" ${createState.artBusy ? 'disabled' : ''}>${createState.artBusy ? `⏳ ${esc(createState.artStep || 'Criando arte…')}` : '🪄 Arte com IA'}</button>
         <div class="ctl-row">
           <div class="mini-seg">
             ${[['auto', '🔀 Variar'], ['card', 'Cartão'], ['photo', 'Foto'], ['classic', 'Fundos']].map(([k, n]) => `<button class="${style() === k ? 'active' : ''}" data-style="${k}">${n}</button>`).join('')}
@@ -1175,6 +1177,7 @@ Responda SOMENTE em JSON: {"frase": "mensagem de bom dia curta e marcante para a
           ${slider('blur', 'Desfoque', 0, 100, cardBlur())}
           ${slider('cardop', 'Cartão', 20, 100, cardOpacity())}`
         : `<div class="bg-picker mini">${Creative.backgrounds.map((b) => `<button class="bg-thumb ${c.bg === b.id ? 'active' : ''}" data-bg="${b.id}" title="${esc(b.name)}"><canvas data-thumb="${b.id}"></canvas></button>`).join('')}</div>`}
+        ${!cardStyle ? `<div class="ctl-row"><span class="sl-label">Letra</span><div class="chips mini" style="flex:1;min-width:0;padding:0">${Object.entries(Creative.FONTS).map(([k, f]) => `<button class="chip ${textFont() === k ? 'active' : ''}" data-font="${k}" style="font-family:${esc(f.css)}">${f.name}</button>`).join('')}</div></div>` : ''}
         ${slider('size', 'Tamanho', 60, 150, textScale())}
         ${slider('pos', 'Posição', 10, 85, textPos())}
 
@@ -1221,7 +1224,7 @@ Responda SOMENTE em JSON: {"frase": "mensagem de bom dia curta e marcante para a
       date: bomdia ? '' : shortDate(), handle: S.settings.handle,
       brand: bomdia && storeName() ? storeName() : 'Bíblia do Empreendedor',
       photo: photos[createState.mode], tint: tint(), tintAmount: tintAmount(),
-      textScale: textScale() / 100, textPos: textPos() / 100,
+      textScale: textScale() / 100, textPos: textPos() / 100, font: textFont(),
       month: MONTHS[new Date().getMonth()].replace(/^./, (x) => x.toUpperCase()),
       title: cardTitle(c),
       cardQuote: bomdia ? c.quote.replace(/^bom (dia|domingo|s[áa]bado)[!,.]?\s*/i, '') || c.quote : c.quote,
@@ -1252,6 +1255,77 @@ Responda SOMENTE em JSON: {"frase": "mensagem de bom dia curta e marcante para a
     }
     createState.busy = false;
     if (current === 'create') renderCreate();
+  }
+
+  // ---------- 🪄 Arte com IA: a IA monta a combinação completa ----------
+  const ART_STYLES = { cartao: 'card', foto: 'photo', fundos: 'classic' };
+  function applyArt(a) {
+    const st = S.settings;
+    st.postStyle = ART_STYLES[a.estilo] || 'card';
+    if (Creative.FONTS[a.letra]) st.textFont = a.letra; else delete st.textFont;
+    const tint = a.pelicula === 'clara' ? 'light' : 'dark';
+    st.photoTint = tint;
+    const amt = Math.max(0, Math.min(80, Math.round(+a.intensidade || 35)));
+    if (st.postStyle === 'card') st.cardTint = Math.min(amt, 50); else st.photoTintAmount = amt;
+    st.textScale = Math.max(70, Math.min(140, Math.round(+a.tamanho || 100)));
+    st.textPos = Math.max(15, Math.min(80, Math.round(+a.posicao || (st.postStyle === 'photo' ? 32 : 50))));
+    const content = { quote: (a.frase || '').replace(/^["“]|["”]$/g, ''), caption: a.legenda || '', scene: a.cena || '', title: a.titulo || '', source: 'ia' };
+    if (createState.mode !== 'bomdia') Object.assign(content, { ref: a.referencia || '', tag: a.tag || 'Palavra do Dia' });
+    if (Creative.backgrounds.some((b) => b.id === a.fundo)) content.bg = a.fundo;
+    if (!content.quote) delete content.quote;
+    if (!content.caption) delete content.caption;
+    setCur(content);
+    save();
+  }
+  function localArt() {
+    const r = (arr) => arr[Math.floor(Math.random() * arr.length)];
+    const bomdia = createState.mode === 'bomdia';
+    const p = r(PROVERBS);
+    return {
+      estilo: r(['cartao', 'foto', 'fundos']), letra: r(Object.keys(Creative.FONTS)), fundo: r(Creative.backgrounds).id,
+      pelicula: r(['escura', 'clara']), intensidade: 30 + Math.floor(Math.random() * 30), tamanho: 100, posicao: 0,
+      frase: bomdia ? r(BOMDIA_LOCAL[createState.day]) : p.texto, referencia: bomdia ? '' : p.ref, tag: 'Palavra do Dia', titulo: '',
+      cena: r(PHOTO_SCENES[bomdia ? 'bomdia' : 'palavra']), legenda: bomdia ? bomdiaCaption(createState.day, r(BOMDIA_LOCAL[createState.day])) : buildCaption(p.texto, p.ref),
+    };
+  }
+  async function aiArt() {
+    const bomdia = createState.mode === 'bomdia';
+    const bgs = Creative.backgrounds.map((b) => `${b.id} (${b.name})`).join(', ');
+    const fonts = Object.entries(Creative.FONTS).map(([k, f]) => `${k} (${f.name})`).join(', ');
+    const tema = bomdia
+      ? `uma mensagem de BOM DIA para ${WEEKDAY_NAMES[createState.day]} da ${storeName() || 'loja'} (${S.settings.storeNiche || 'loja de celulares e assistência técnica'}), motivacional com fé cristã leve, tema do dia: ${WEEKDAY_THEMES[createState.day]}`
+      : `a Palavra do dia do perfil cristão "Bíblia do Empreendedor": um versículo/provérbio (tradução fiel da King James para o português, com referência exata) OU uma frase original curta sobre processo, Deus e empreender`;
+    const prompt = `Você é diretor de arte de Instagram. Crie UMA arte completa e harmoniosa para ${tema}.
+Escolha a combinação que combina melhor com a mensagem:
+- estilo: "cartao" (foto desfocada + cartão claro com título e frase com marca-texto, delicado), "foto" (foto cinematográfica + frase grande por cima, emocionante) ou "fundos" (fundo gráfico elegante preto e dourado, sóbrio).
+- fundo (só para "fundos"): um destes ids: ${bgs}.
+- letra (para "foto" e "fundos"): um destes ids: ${fonts}.
+- pelicula: "escura" ou "clara"; intensidade: 0 a 80.
+- tamanho do texto: 80 a 130 (100 = normal); posicao vertical do texto: 15 a 80 (% da altura).
+- cena: descrição EM INGLÊS de uma foto cinematográfica para o fundo, ligada à mensagem, sem texto.
+Responda SOMENTE em JSON: {"estilo": "", "fundo": "", "letra": "", "pelicula": "", "intensidade": 0, "tamanho": 100, "posicao": 50, "frase": "no máximo 130 caracteres", "referencia": "Livro cap:vers ou vazio", "tag": "2 a 3 palavras", "titulo": "título curto para o estilo cartão", "cena": "", "legenda": "legenda de Instagram com 3 a 5 frases, chamada para ação e 8 hashtags"}`;
+    const str = { type: 'string' }, num = { type: 'number' };
+    const txt = await gemini([{ role: 'user', parts: [{ text: prompt }] }], {
+      system: 'Você é um diretor de arte cristão, criativo e com bom gosto. Nunca invente versículos.', json: true, temperature: 1,
+      schema: { type: 'object', additionalProperties: false, required: ['estilo', 'fundo', 'letra', 'pelicula', 'intensidade', 'tamanho', 'posicao', 'frase', 'referencia', 'tag', 'titulo', 'cena', 'legenda'],
+        properties: { estilo: { type: 'string', enum: ['cartao', 'foto', 'fundos'] }, fundo: str, letra: str, pelicula: { type: 'string', enum: ['escura', 'clara'] }, intensidade: num, tamanho: num, posicao: num, frase: str, referencia: str, tag: str, titulo: str, cena: str, legenda: str } },
+    });
+    return JSON.parse(txt.replace(/^```(json)?|```$/g, '').trim());
+  }
+  async function runArt() {
+    const mode = createState.mode;
+    createState.artBusy = true; createState.artStep = 'A IA está montando a arte…'; renderCreate();
+    let art, usedAI = false;
+    try { if (hasAI()) { art = await aiArt(); usedAI = true; } } catch { /* usa combinação local */ }
+    if (!art) art = localArt();
+    applyArt(art);
+    if (S.settings.postStyle !== 'classic') {
+      createState.artStep = 'Criando a foto de fundo… (até 1 min)'; renderCreate();
+      try { await generatePhoto(mode); } catch { toast('Arte criada, mas a foto não pôde ser gerada. Use a Galeria se quiser.'); }
+    }
+    createState.artBusy = false; createState.artStep = '';
+    if (current === 'create') renderCreate();
+    toast(usedAI ? 'Arte criada pela IA 🪄' : 'Combinação surpresa criada 🪄');
   }
 
   async function runPhoto() {
@@ -1304,6 +1378,8 @@ Responda SOMENTE em JSON: {"frase": "mensagem de bom dia curta e marcante para a
     if (m) { createState.mode = m.dataset.mode; renderCreate(); return; }
     const d = e.target.closest('[data-day]');
     if (d) { createState.day = +d.dataset.day; renderCreate(); return; }
+    const fb = e.target.closest('[data-font]');
+    if (fb) { S.settings.textFont = fb.dataset.font; save(); renderCreate(); return; }
     const tb = e.target.closest('[data-tint]');
     if (tb) {
       S.settings.photoTint = tb.dataset.tint;
@@ -1327,6 +1403,7 @@ Responda SOMENTE em JSON: {"frase": "mensagem de bom dia curta e marcante para a
     const c = cur();
     switch (a.dataset.act) {
       case 'gen-photo': runPhoto(); break;
+      case 'ai-art': runArt(); break;
       case 'download': download(await canvasBlob(createState.format), fileName(createState.format)); toast('Imagem salva'); break;
       case 'download-both':
         download(await canvasBlob('post'), fileName('post'));

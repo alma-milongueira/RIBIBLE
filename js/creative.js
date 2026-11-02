@@ -304,6 +304,8 @@ const Creative = (() => {
         document.fonts.load('600 40px "Cormorant Garamond"'),
         document.fonts.load('italic 600 40px "Cormorant Garamond"'),
         document.fonts.load('400 40px "Patrick Hand SC"'),
+        document.fonts.load('400 40px "Great Vibes"'),
+        document.fonts.load('700 40px "Exo 2"'),
         document.fonts.load('700 40px "Inter"'),
         document.fonts.load('500 40px "Inter"'),
       ]);
@@ -355,11 +357,14 @@ const Creative = (() => {
       boxTop = c - half; boxBottom = c + half;
     }
     const quote = opts.ref ? `“${opts.quote}”` : opts.quote;
-    const fit = fitText(ctx, quote, W - (story ? 180 : 200), boxBottom - boxTop, {
-      max: Math.round((story ? 92 : 80) * k), min: Math.round(36 * k),
-      font: (s) => `${opts.ref ? '600' : 'italic 600'} ${s}px "Cormorant Garamond"`,
+    const F = opts.font && opts.font !== 'serif' ? FONTS[opts.font] : null;
+    const qFont = (sz) => (F ? `${F.w} ${sz}px ${F.css}` : `${opts.ref ? '600' : 'italic 600'} ${sz}px "Cormorant Garamond"`);
+    const kk = k * (F ? F.scale / 1.2 : 1);
+    const fit = fitText(ctx, F && F.upper ? quote.toUpperCase() : quote, W - (story ? 180 : 200), boxBottom - boxTop, {
+      max: Math.round((story ? 92 : 80) * kk), min: Math.round(36 * kk), lh: F ? F.lh * 0.9 : 1.28,
+      font: qFont,
     });
-    ctx.font = `${opts.ref ? '600' : 'italic 600'} ${fit.size}px "Cormorant Garamond"`;
+    ctx.font = qFont(fit.size);
     ctx.fillStyle = light ? '#111111' : '#ffffff';
     ctx.shadowColor = 'rgba(0,0,0,.6)'; ctx.shadowBlur = light ? 0 : 18;
     const blockH = fit.lines.length * fit.lh;
@@ -388,6 +393,14 @@ const Creative = (() => {
 
   // ---------- Estilo "foto + manuscrito" (foto cinematográfica com frase escrita à mão) ----------
   const HAND = '"Patrick Hand SC", "Comic Sans MS", cursive';
+  // Tipos de letra disponíveis para o texto principal
+  const FONTS = {
+    hand: { name: 'Manuscrita', css: HAND, w: '400', upper: true, sp: 0.14, lh: 1.6, scale: 1 },
+    serif: { name: 'Clássica', css: '"Cormorant Garamond", Georgia, serif', w: '600', upper: false, sp: 0.01, lh: 1.3, scale: 1.2 },
+    modern: { name: 'Moderna', css: '"Exo 2", "Inter", sans-serif', w: '700', upper: false, sp: 0, lh: 1.25, scale: 1.05 },
+    elegant: { name: 'Elegante', css: '"Cinzel", "Times New Roman", serif', w: '700', upper: true, sp: 0.05, lh: 1.45, scale: 0.95 },
+    script: { name: 'Caligrafia', css: '"Great Vibes", cursive', w: '400', upper: false, sp: 0, lh: 1.25, scale: 1.45 },
+  };
   function wrapSpaced(ctx, text, maxW, sp) {
     const words = text.split(/\s+/);
     const width = (t) => ctx.measureText(t).width + sp * Math.max(0, [...t].length - 1);
@@ -430,16 +443,17 @@ const Creative = (() => {
 
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     const cx = W / 2;
-    const text = (opts.quote || '').toUpperCase();
+    const F = FONTS[opts.font] || FONTS.hand;
+    const text = F.upper ? (opts.quote || '').toUpperCase() : (opts.quote || '');
     const maxW = W * 0.74;
-    const k = opts.textScale || 1;
+    const k = (opts.textScale || 1) * F.scale;
     let size = Math.round((story ? 70 : 64) * k), lines, lh, sp;
     const minSize = Math.round(32 * k);
     for (; size >= minSize; size -= 2) {
-      ctx.font = `400 ${size}px ${HAND}`;
-      sp = size * 0.14;
+      ctx.font = `${F.w} ${size}px ${F.css}`;
+      sp = size * F.sp;
       lines = wrapSpaced(ctx, text, maxW, sp);
-      lh = size * 1.6;
+      lh = size * F.lh;
       if (lines.length * lh <= H * (story ? 0.3 : 0.34) * k) break;
     }
     const centerY = H * (opts.textPos ?? (story ? 0.3 : 0.32));
@@ -452,7 +466,7 @@ const Creative = (() => {
       spaced(ctx, opts.tag.toUpperCase(), cx, y - lh * 1.05, size * 0.12);
       ctx.fillStyle = ink;
     }
-    ctx.font = `400 ${size}px ${HAND}`;
+    ctx.font = `${F.w} ${size}px ${F.css}`;
     for (const l of lines) { spaced(ctx, l, cx, y, sp); y += lh; }
     if (opts.ref) {
       ctx.font = `400 ${Math.round(size * 0.6)}px ${HAND}`;
@@ -633,5 +647,5 @@ const Creative = (() => {
     ctx.restore();
   }
 
-  return { backgrounds, render, renderPhoto, renderCard, thumb, ensureFonts, mulberry32, setAccent, mix, hexRgb };
+  return { backgrounds, FONTS, render, renderPhoto, renderCard, thumb, ensureFonts, mulberry32, setAccent, mix, hexRgb };
 })();
