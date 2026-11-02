@@ -728,7 +728,7 @@ Regras:
           systemInstruction: { parts: [{ text: system }] },
           contents,
           generationConfig: {
-            temperature, maxOutputTokens: maxTokens,
+            temperature, maxOutputTokens: maxTokens, seed: Math.floor(Math.random() * 2147483647),
             ...(json ? { responseMimeType: 'application/json' } : {}),
             ...(think ? { thinkingConfig: think } : {}),
           },
@@ -939,9 +939,28 @@ Regras:
     save();
   }
 
+  // ---------- Variedade: cada pedido à IA sai diferente ----------
+  const ANGLES = [
+    'gratidão', 'uma metáfora do dia a dia do comércio', 'um desafio prático para hoje', 'uma pergunta que faz pensar',
+    'coragem para recomeçar', 'humor leve e acolhedor', 'esperança no processo', 'disciplina e constância', 'servir bem as pessoas',
+    'família e propósito', 'fé no meio da pressão', 'pequenas vitórias', 'sabedoria para decidir', 'paz e confiança em Deus',
+    'trabalho em equipe', 'excelência no atendimento', 'semear hoje para colher amanhã', 'descanso e equilíbrio',
+  ];
+  const BOOKS_HINT = ['Provérbios', 'Salmos', 'Eclesiastes', 'Isaías', 'Mateus', 'Lucas', 'João', 'Romanos', 'Filipenses', 'Colossenses', 'Tiago', 'Josué', 'Gálatas', '1 Coríntios', 'Hebreus', 'Deuteronômio', '2 Coríntios', 'Efésios'];
+  const rnd = (arr) => arr[Math.floor(Math.random() * arr.length)];
+  function aiHistory(kind) { S.aiHistory = S.aiHistory || {}; return (S.aiHistory[kind] = S.aiHistory[kind] || []); }
+  function rememberAI(kind, text) {
+    const h = aiHistory(kind);
+    if (text) { h.push(text.slice(0, 160)); while (h.length > 25) h.shift(); save(); }
+  }
+  function avoidBlock(kind, extra = []) {
+    const list = [...new Set([...aiHistory(kind), ...extra].filter(Boolean))].slice(-15);
+    return list.length ? `\nNÃO repita nem reescreva de forma parecida nenhuma destas frases já usadas:\n${list.map((t) => `- ${t}`).join('\n')}` : '';
+  }
+
   async function aiCreative() {
-    const theme = pick(THEMES, dayNum() + Math.floor(Math.random() * 5));
-    const prompt = `Crie o conteúdo do post de hoje (${longDate()}) para o perfil cristão "Bíblia do Empreendedor". Tema: ${theme}.
+    const theme = rnd(THEMES);
+    const prompt = `Crie o conteúdo do post de hoje (${longDate()}) para o perfil cristão "Bíblia do Empreendedor". Tema: ${theme}. Ângulo: ${rnd(ANGLES)}. Se escolher versículo, prefira um de ${rnd(BOOKS_HINT)} ou ${rnd(BOOKS_HINT)}, evitando os mais batidos.${avoidBlock('palavra', [getDailyCreative().quote])}
 Escolha UM formato:
 (a) um versículo ou provérbio bíblico, com tradução fiel da King James (KJV) para o português, e a referência exata; OU
 (b) uma frase original, curta e marcante, sobre processo, Deus, fé e empreender (sem referência).
@@ -955,6 +974,7 @@ Responda SOMENTE em JSON: {"texto": "no máximo 170 caracteres", "referencia": "
     });
     const j = JSON.parse(txt.replace(/^```(json)?|```$/g, '').trim());
     if (!j.texto) throw new Error('Resposta inválida');
+    rememberAI('palavra', j.texto);
     return { quote: j.texto.replace(/^["“]|["”]$/g, ''), ref: j.referencia || '', tag: j.tag || 'Palavra do Dia', caption: j.legenda || buildCaption(j.texto, j.referencia), scene: j.cena || '', source: 'ia' };
   }
 
@@ -1011,7 +1031,7 @@ Responda SOMENTE em JSON: {"texto": "no máximo 170 caracteres", "referencia": "
   async function aiBomDia(day) {
     const loja = storeName() || 'uma loja de celulares';
     const prompt = `Crie uma mensagem de BOM DIA para ${WEEKDAY_NAMES[day]} para o Instagram da ${loja} (${S.settings.storeNiche || 'loja de celulares e assistência técnica'}${S.settings.storeCity ? ', em ' + S.settings.storeCity : ''}).
-Tom: motivacional, positivo, com fé cristã leve e natural (sem pregação), ligado ao tema do dia: ${WEEKDAY_THEMES[day]}.
+Tom: motivacional, positivo, com fé cristã leve e natural (sem pregação), ligado ao tema do dia: ${WEEKDAY_THEMES[day]}. Ângulo desta vez: ${rnd(ANGLES)}. Seja original e evite clichês como "página em branco" e "novo ciclo".${avoidBlock('bomdia', [getBomDia(day).quote])}
 Responda SOMENTE em JSON: {"frase": "mensagem de bom dia curta e marcante para a arte, no máximo 110 caracteres", "legenda": "legenda para Instagram com 3 a 4 frases, citando a loja de forma natural, uma chamada para ação (assistência técnica, acessórios ou aparelhos) e 8 hashtags em português", "cena": "descrição EM INGLÊS de uma foto cinematográfica para o fundo da arte, ligada a celulares/loja/manhã/fé, sem texto"}`;
     const txt = await gemini([{ role: 'user', parts: [{ text: prompt }] }], {
       system: 'Você é um social media brasileiro especialista em conteúdo para lojas de celular, com valores cristãos.', json: true, temperature: 1,
@@ -1019,6 +1039,7 @@ Responda SOMENTE em JSON: {"frase": "mensagem de bom dia curta e marcante para a
     });
     const j = JSON.parse(txt.replace(/^```(json)?|```$/g, '').trim());
     if (!j.frase) throw new Error('Resposta inválida');
+    rememberAI('bomdia', j.frase);
     return { quote: j.frase.replace(/^["“]|["”]$/g, ''), caption: j.legenda || bomdiaCaption(day, j.frase), scene: j.cena || pick(PHOTO_SCENES.bomdia, Date.now()), source: 'ia' };
   }
 
@@ -1240,7 +1261,7 @@ Responda SOMENTE em JSON: {"frase": "mensagem de bom dia curta e marcante para a
       else setCreative(await aiCreative());
       if (!auto) toast('Novo texto criado ✨');
     } catch (e) {
-      if (!auto) toast(e.message === 'NO_KEY' ? 'Configure a IA em Ajustes' : 'IA indisponível agora');
+      if (!auto) toast(e.message === 'NO_KEY' ? 'Configure a IA em Ajustes' : `IA não respondeu: ${String(e.message || '').slice(0, 70)}`);
     }
     createState.busy = false;
     if (current === 'create') renderCreate();
@@ -1283,7 +1304,8 @@ Responda SOMENTE em JSON: {"frase": "mensagem de bom dia curta e marcante para a
     const tema = bomdia
       ? `uma mensagem de BOM DIA para ${WEEKDAY_NAMES[createState.day]} da ${storeName() || 'loja'} (${S.settings.storeNiche || 'loja de celulares e assistência técnica'}), motivacional com fé cristã leve, tema do dia: ${WEEKDAY_THEMES[createState.day]}`
       : `a Palavra do dia do perfil cristão "Bíblia do Empreendedor": um versículo/provérbio (tradução fiel da King James para o português, com referência exata) OU uma frase original curta sobre processo, Deus e empreender`;
-    const prompt = `Você é diretor de arte de Instagram. Crie UMA arte completa e harmoniosa para ${tema}.
+    const kind = bomdia ? 'bomdia' : 'palavra';
+    const prompt = `Você é diretor de arte de Instagram. Crie UMA arte completa e harmoniosa para ${tema}. Ângulo desta vez: ${rnd(ANGLES)}.${avoidBlock(kind, [cur().quote])}
 Escolha a combinação que combina melhor com a mensagem:
 - estilo: "cartao" (foto desfocada + cartão claro com título e frase com marca-texto, delicado), "foto" (foto cinematográfica + frase grande por cima, emocionante) ou "fundos" (fundo gráfico elegante preto e dourado, sóbrio).
 - fundo (só para "fundos"): um destes ids: ${bgs}.
@@ -1298,7 +1320,9 @@ Responda SOMENTE em JSON: {"estilo": "", "fundo": "", "letra": "", "intensidade"
       schema: { type: 'object', additionalProperties: false, required: ['estilo', 'fundo', 'letra', 'intensidade', 'tamanho', 'posicao', 'frase', 'referencia', 'tag', 'titulo', 'cena', 'legenda'],
         properties: { estilo: { type: 'string', enum: ['cartao', 'foto', 'fundos'] }, fundo: str, letra: str, intensidade: num, tamanho: num, posicao: num, frase: str, referencia: str, tag: str, titulo: str, cena: str, legenda: str } },
     });
-    return JSON.parse(txt.replace(/^```(json)?|```$/g, '').trim());
+    const art = JSON.parse(txt.replace(/^```(json)?|```$/g, '').trim());
+    rememberAI(kind, art.frase);
+    return art;
   }
   async function runArt() {
     const mode = createState.mode;
