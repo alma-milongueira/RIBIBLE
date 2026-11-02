@@ -21,6 +21,8 @@
   };
   let S = load();
   // versões antigas usavam o modelo mais lento como padrão
+  if (!S.settings.styleAutoSet) { S.settings.postStyle = 'auto'; S.settings.styleAutoSet = true; delete S.settings.textPos; }
+  if (!S.settings.storeName) S.settings.storeName = 'RB Tech Celulares';
   // família Gemini 2.5 foi desativada pelo Google → migra para os apelidos atuais
   if (/^gemini-2\.5-flash-lite/.test(S.settings.model)) S.settings.model = 'gemini-flash-lite-latest';
   else if (/^gemini-2\.5/.test(S.settings.model)) S.settings.model = 'gemini-flash-latest';
@@ -1090,18 +1092,34 @@ Responda SOMENTE em JSON: {"frase": "mensagem de bom dia curta e marcante para a
   function setCur(obj) {
     if (createState.mode === 'bomdia') { Object.assign(getBomDia(createState.day), obj); save(); } else setCreative(obj);
   }
-  const style = () => S.settings.postStyle || 'classic';
+  const style = () => S.settings.postStyle || 'auto';
+  // "Variar": alterna o estilo a cada dia (Cartão, Foto quando houver foto, Fundos)
+  function effStyle() {
+    const st = style();
+    if (st !== 'auto') return st;
+    const opts = photos[createState.mode] ? ['card', 'photo', 'classic'] : ['card', 'classic'];
+    const n = createState.mode === 'bomdia' ? weekNum() + createState.day : dayNum();
+    return pick(opts, n);
+  }
+  const CARD_TITLES = [(m, r) => `Que ${m} seja o que Deus diz em ${r}`, (m, r) => `O que Deus diz hoje em ${r}`, (m, r) => `Uma palavra para o seu dia: ${r}`];
+  function cardTitle(c) {
+    if (c.title) return c.title;
+    if (createState.mode === 'bomdia') return `Bom dia, ${WEEKDAY_NAMES[createState.day].toLowerCase()}!`;
+    if (c.ref) return pick(CARD_TITLES, dayNum())(MONTHS[new Date().getMonth()], c.ref);
+    return c.tag || 'Reflexão do dia';
+  }
   const tint = () => S.settings.photoTint || 'dark';
   const tintAmount = () => (S.settings.photoTintAmount ?? 35);
   const textScale = () => (S.settings.textScale ?? 100);
-  const textPos = () => S.settings.textPos ?? (style() === 'photo' ? 32 : 50);
+  const textPos = () => S.settings.textPos ?? (effStyle() === 'photo' ? 32 : 50);
 
   function renderCreate() {
     getDailyCreative();
     const c = cur();
     if (S.creativeSeen !== dateKey()) { S.creativeSeen = dateKey(); save(); }
     const bomdia = createState.mode === 'bomdia';
-    const photoStyle = style() === 'photo';
+    const photoStyle = effStyle() === 'photo';
+    const cardStyle = effStyle() === 'card';
     const el = $('#view-create');
     const WA_ICON = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm5.8 14.1c-.2.7-1.4 1.3-2 1.4-.5.1-1.2.1-1.9-.1-.4-.1-1-.3-1.7-.6-3-1.3-4.9-4.3-5.1-4.5-.1-.2-1.2-1.6-1.2-3.1s.8-2.2 1-2.5c.3-.3.6-.4.8-.4h.6c.2 0 .4 0 .6.5l.9 2.1c.1.1.1.3 0 .5l-.3.5-.4.5c-.1.1-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.2 1 2.1 1.4 2.4 1.5.3.1.5.1.6-.1l.9-1.1c.2-.3.4-.2.6-.1l2 .9c.3.1.5.2.5.3.1.1.1.7-.1 1.4z"/></svg>';
     const slider = (id, label, min, max, val, unit = '%') => `
@@ -1126,9 +1144,10 @@ Responda SOMENTE em JSON: {"frase": "mensagem de bom dia curta e marcante para a
       <div class="studio-panel">
         <div class="ctl-row">
           <div class="mini-seg">
-            <button class="${!photoStyle ? 'active' : ''}" data-style="classic">Fundos</button>
-            <button class="${photoStyle ? 'active' : ''}" data-style="photo">Foto</button>
+            ${[['auto', '🔀 Variar'], ['card', 'Cartão'], ['photo', 'Foto'], ['classic', 'Fundos']].map(([k, n]) => `<button class="${style() === k ? 'active' : ''}" data-style="${k}">${n}</button>`).join('')}
           </div>
+        </div>
+        <div class="ctl-row">
           <label class="mbtn accent" title="Foto da galeria">🖼️ Galeria<input type="file" accept="image/*" id="photo-file" hidden></label>
           <button class="mbtn" data-act="gen-photo" ${createState.photoBusy ? 'disabled' : ''}>${createState.photoBusy ? '⏳ Gerando…' : '✨ Foto IA'}</button>
         </div>
@@ -1141,6 +1160,7 @@ Responda SOMENTE em JSON: {"frase": "mensagem de bom dia curta e marcante para a
             </div>
           </div>
           ${slider('tint', 'Opacidade', 0, 85, tintAmount())}`
+        : cardStyle ? '<p class="small muted" style="margin:0 2px">Cartão: a foto da galeria (ou da IA) aparece desfocada ao fundo. Sem foto, usa uma Bíblia aberta.</p>'
         : `<div class="bg-picker mini">${Creative.backgrounds.map((b) => `<button class="bg-thumb ${c.bg === b.id ? 'active' : ''}" data-bg="${b.id}" title="${esc(b.name)}"><canvas data-thumb="${b.id}"></canvas></button>`).join('')}</div>`}
         ${slider('size', 'Tamanho', 60, 150, textScale())}
         ${slider('pos', 'Posição', 10, 85, textPos())}
@@ -1189,11 +1209,17 @@ Responda SOMENTE em JSON: {"frase": "mensagem de bom dia curta e marcante para a
       brand: bomdia && storeName() ? storeName() : 'Bíblia do Empreendedor',
       photo: photos[createState.mode], tint: tint(), tintAmount: tintAmount(),
       textScale: textScale() / 100, textPos: textPos() / 100,
+      month: MONTHS[new Date().getMonth()].replace(/^./, (x) => x.toUpperCase()),
+      title: cardTitle(c),
+      cardQuote: bomdia ? c.quote.replace(/^bom (dia|domingo|s[áa]bado)[!,.]?\s*/i, '') || c.quote : c.quote,
+      cardBrand: storeName() || 'Bíblia do Empreendedor',
     };
   }
   function paint(cv, format) {
     const o = renderOpts(format);
-    return style() === 'photo' ? Creative.renderPhoto(cv, o) : Creative.render(cv, o);
+    const st = effStyle();
+    if (st === 'card') return Creative.renderCard(cv, { ...o, quote: o.cardQuote, brand: o.cardBrand });
+    return st === 'photo' ? Creative.renderPhoto(cv, o) : Creative.render(cv, o);
   }
   function drawPreview() {
     const cv = $('#cv');
@@ -1355,13 +1381,14 @@ Responda SOMENTE em JSON: {"frase": "mensagem de bom dia curta e marcante para a
     openSheet(`
       <h3>Editar texto</h3>
       <div class="field"><label>Tag do topo</label><input id="ed-tag" value="${esc(c.tag)}"></div>
+      <div class="field"><label>Título do cartão (opcional)</label><input id="ed-title" value="${esc(c.title || '')}" placeholder="${esc(cardTitle({ ...c, title: '' }))}"></div>
       <div class="field"><label>Mensagem</label><textarea id="ed-quote" rows="4">${esc(c.quote)}</textarea></div>
       <div class="field"><label>Referência (opcional)</label><input id="ed-ref" value="${esc(c.ref)}" placeholder="Ex.: Provérbios 16:3"></div>
       <div class="field"><label>Legenda</label><textarea id="ed-cap" rows="6">${esc(c.caption)}</textarea></div>
       <div class="field"><label>Cena da foto (para a IA, em inglês)</label><textarea id="ed-scene" rows="2" placeholder="ex.: child praying by the bed, warm lamp light">${esc(c.scene || '')}</textarea></div>
       <button class="btn primary block" id="ed-save">Aplicar</button>`);
     $('#ed-save').onclick = () => {
-      setCur({ tag: $('#ed-tag').value.trim(), quote: $('#ed-quote').value.trim() || c.quote, ref: $('#ed-ref').value.trim(), caption: $('#ed-cap').value, scene: $('#ed-scene').value.trim() });
+      setCur({ tag: $('#ed-tag').value.trim(), quote: $('#ed-quote').value.trim() || c.quote, ref: $('#ed-ref').value.trim(), caption: $('#ed-cap').value, scene: $('#ed-scene').value.trim(), title: $('#ed-title').value.trim() });
       closeSheet(); renderCreate();
     };
   }

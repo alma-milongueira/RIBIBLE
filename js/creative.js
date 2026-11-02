@@ -304,6 +304,8 @@ const Creative = (() => {
         document.fonts.load('600 40px "Cormorant Garamond"'),
         document.fonts.load('italic 600 40px "Cormorant Garamond"'),
         document.fonts.load('400 40px "Patrick Hand SC"'),
+        document.fonts.load('700 40px "Inter"'),
+        document.fonts.load('500 40px "Inter"'),
       ]);
     } catch (e) { /* segue com fontes padrão */ }
   }
@@ -469,6 +471,124 @@ const Creative = (() => {
     return canvas;
   }
 
+  // ---------- Estilo "Cartão" (foto desfocada + cartão claro com marca-texto) ----------
+  const SANS = '"Inter", system-ui, -apple-system, sans-serif';
+  function blurDraw(ctx, src, W, H, factor = 14) {
+    // desfoque compatível com todos os navegadores: reduz e amplia
+    const sw = Math.max(8, Math.round(W / factor)), sh = Math.max(8, Math.round(H / factor));
+    const t = document.createElement('canvas'); t.width = sw; t.height = sh;
+    const tc = t.getContext('2d');
+    if (src) { const r = Math.max(sw / src.width, sh / src.height); tc.drawImage(src, (sw - src.width * r) / 2, (sh - src.height * r) / 2, src.width * r, src.height * r); }
+    ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(t, 0, 0, W, H);
+  }
+  function bookScene(W, H, rng) {
+    // cena desenhada: Bíblia aberta com trechos marcados + marca-texto
+    const c = document.createElement('canvas'); c.width = W; c.height = H;
+    const x = c.getContext('2d');
+    x.fillStyle = '#b9b2ad'; x.fillRect(0, 0, W, H);
+    const hl = `rgba(${hexRgb(C.a).join(',')},.45)`;
+    const page = (px, py, pw, ph) => {
+      x.fillStyle = '#f4efea'; x.fillRect(px, py, pw, ph);
+      for (let y = py + 60; y < py + ph - 40; y += 34) {
+        const w = pw * (0.55 + rng() * 0.35);
+        if (rng() > 0.82) { x.fillStyle = hl; x.fillRect(px + 40, y - 12, w, 26); }
+        x.fillStyle = 'rgba(60,55,55,.55)'; x.fillRect(px + 40, y - 4, w, 9);
+      }
+    };
+    page(W * 0.02, H * 0.12, W * 0.47, H * 0.8);
+    page(W * 0.51, H * 0.12, W * 0.47, H * 0.8);
+    x.fillStyle = 'rgba(0,0,0,.18)'; x.fillRect(W * 0.49, H * 0.12, W * 0.02, H * 0.8);
+    x.fillStyle = mix(C.a, '#ffffff', 0.45); x.fillRect(W * 0.3, H * 0.02, W * 0.4, H * 0.07);
+    x.fillStyle = '#ffffff'; x.fillRect(W * 0.26, H * 0.02, W * 0.06, H * 0.07);
+    return c;
+  }
+  function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+  }
+  function phoneIcon(ctx, x, y, s, color) {
+    ctx.strokeStyle = color; ctx.lineWidth = s * 0.1;
+    roundRect(ctx, x, y, s * 0.6, s, s * 0.12); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x + s * 0.22, y + s * 0.12); ctx.lineTo(x + s * 0.38, y + s * 0.12); ctx.stroke();
+    ctx.beginPath(); ctx.arc(x + s * 0.3, y + s * 0.84, s * 0.05, 0, Math.PI * 2); ctx.fillStyle = color; ctx.fill();
+  }
+  function renderCard(canvas, opts) {
+    const story = opts.format === 'story';
+    const W = 1080, H = story ? 1920 : 1350;
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext('2d');
+    blurDraw(ctx, opts.photo || bookScene(W, H, mulberry32(opts.seed || 5)), W, H, opts.photo ? 22 : 9);
+    ctx.fillStyle = 'rgba(255,255,255,.08)'; ctx.fillRect(0, 0, W, H);
+
+    const k = opts.textScale || 1;
+    const cw = 880, cx = (W - cw) / 2, pad = 64;
+    const ink = '#2b2a2c';
+    const titleSize = Math.round(62 * k), quoteSize = Math.round(46 * k);
+    ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
+    ctx.font = `700 ${titleSize}px ${SANS}`;
+    const tLines = wrap(ctx, opts.title || '', cw - pad * 2);
+    ctx.font = `400 ${quoteSize}px ${SANS}`;
+    const qText = opts.quote ? `“${opts.quote.replace(/^["“]|["”]$/g, '')}”` : '';
+    const qLines = wrap(ctx, qText, cw - pad * 2 - 10);
+    const headH = 120, tLH = titleSize * 1.14, qLH = quoteSize * 1.5;
+    const ch = headH + 50 + tLines.length * tLH + (tLines.length ? 46 : 0) + qLines.length * qLH + 56;
+    const cy = Math.max(40, Math.min(H - ch - 40, H * (opts.textPos ?? 0.5) - ch / 2));
+
+    // cartão
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,.22)'; ctx.shadowBlur = 50; ctx.shadowOffsetY = 18;
+    ctx.fillStyle = 'rgba(252,247,248,.93)';
+    roundRect(ctx, cx, cy, cw, ch, 54); ctx.fill();
+    ctx.restore();
+    // aba do mês
+    ctx.save(); roundRect(ctx, cx, cy, cw, ch, 54); ctx.clip();
+    ctx.fillStyle = mix(C.a, '#f3eef0', 0.86);
+    ctx.fillRect(cx, cy, 300, headH);
+    ctx.restore();
+    ctx.fillStyle = ink; ctx.font = `700 46px ${SANS}`;
+    ctx.fillText(opts.month || '', cx + 50, cy + 77);
+    // marca
+    const brandX = cx + 340;
+    phoneIcon(ctx, brandX, cy + 38, 46, C.ink || C.a);
+    ctx.fillStyle = '#3a3637'; ctx.font = `600 40px "Cormorant Garamond", Georgia, serif`;
+    // ícones de enfeite (som e Aa)
+    const ix = cx + cw - 190, iy = cy + 60;
+    ctx.fillText(opts.brand || '', brandX + 44, cy + 76, ix - (brandX + 44) - 34);
+    ctx.fillStyle = ink;
+    ctx.beginPath(); ctx.moveTo(ix, iy - 10); ctx.lineTo(ix + 12, iy - 10); ctx.lineTo(ix + 28, iy - 24); ctx.lineTo(ix + 28, iy + 24); ctx.lineTo(ix + 12, iy + 10); ctx.lineTo(ix, iy + 10); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = ink; ctx.lineWidth = 5;
+    ctx.beginPath(); ctx.arc(ix + 30, iy, 14, -0.9, 0.9); ctx.stroke();
+    ctx.beginPath(); ctx.arc(ix + 30, iy, 26, -0.9, 0.9); ctx.stroke();
+    ctx.font = `700 44px ${SANS}`; ctx.fillText('Aa', cx + cw - 105, cy + 77);
+    ctx.fillStyle = 'rgba(0,0,0,.08)'; ctx.fillRect(cx + 12, cy + headH, cw - 24, 3);
+
+    // título
+    let y = cy + headH + 50 + titleSize * 0.85;
+    ctx.fillStyle = ink; ctx.font = `700 ${titleSize}px ${SANS}`;
+    for (const l of tLines) { ctx.fillText(l, cx + pad, y); y += tLH; }
+    if (tLines.length) y += 46 - tLH + qLH * 0.75;
+    else y = cy + headH + 50 + quoteSize;
+    // frase com marca-texto
+    ctx.font = `400 ${quoteSize}px ${SANS}`;
+    for (const l of qLines) {
+      const w = ctx.measureText(l).width;
+      ctx.fillStyle = `rgba(${hexRgb(C.a).join(',')},.2)`;
+      roundRect(ctx, cx + pad - 8, y - quoteSize * 0.95, w + 16, quoteSize * 1.3, 10); ctx.fill();
+      ctx.fillStyle = '#3a3839';
+      ctx.fillText(l, cx + pad, y);
+      y += qLH;
+    }
+    if (opts.handle) {
+      ctx.textAlign = 'center'; ctx.font = `500 28px ${SANS}`; ctx.fillStyle = 'rgba(255,255,255,.9)';
+      ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = 10;
+      ctx.fillText(opts.handle, W / 2, H - (story ? 280 : 70));
+      ctx.shadowBlur = 0;
+    }
+    return canvas;
+  }
+
   function thumb(canvas, bgId) {
     canvas.width = 120; canvas.height = 120;
     const ctx = canvas.getContext('2d');
@@ -477,5 +597,5 @@ const Creative = (() => {
     ctx.restore();
   }
 
-  return { backgrounds, render, renderPhoto, thumb, ensureFonts, mulberry32, setAccent, mix, hexRgb };
+  return { backgrounds, render, renderPhoto, renderCard, thumb, ensureFonts, mulberry32, setAccent, mix, hexRgb };
 })();
