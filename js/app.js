@@ -926,7 +926,7 @@ Regras:
 
   function getDailyCreative() {
     if (!S.creative || S.creative.date !== dateKey()) {
-      S.creative = { date: dateKey(), bg: pick(Creative.backgrounds, dayNum()).id, aiTried: false, ...localDaily() };
+      S.creative = { date: dateKey(), bg: pick(Creative.backgrounds, dayNum()).id, aiTried: false, scene: pick(PHOTO_SCENES.palavra, dayNum()), ...localDaily() };
       save();
     }
     return S.creative;
@@ -943,38 +943,193 @@ Regras:
 Escolha UM formato:
 (a) um versículo ou provérbio bíblico, com tradução fiel da King James (KJV) para o português, e a referência exata; OU
 (b) uma frase original, curta e marcante, sobre processo, Deus, fé e empreender (sem referência).
-Responda SOMENTE em JSON: {"texto": "no máximo 170 caracteres", "referencia": "Livro cap:vers ou vazio", "tag": "2 a 3 palavras para o topo, ex: Palavra do Dia", "legenda": "legenda para Instagram com 3 a 5 frases curtas sobre o tema, uma chamada para ação e 8 hashtags, incluindo #bibliadoempreendedor"}`;
+Responda SOMENTE em JSON: {"texto": "no máximo 170 caracteres", "referencia": "Livro cap:vers ou vazio", "tag": "2 a 3 palavras para o topo, ex: Palavra do Dia", "legenda": "legenda para Instagram com 3 a 5 frases curtas sobre o tema, uma chamada para ação e 8 hashtags, incluindo #bibliadoempreendedor", "cena": "descrição EM INGLÊS de uma foto cinematográfica e emocionante para o fundo da arte, ligada à mensagem (ex.: criança orando ao lado da cama, luz quente), sem texto"}`;
     const txt = await gemini([{ role: 'user', parts: [{ text: prompt }] }], {
       system: 'Você cria conteúdo cristão inspirador e fiel à Bíblia para empreendedores. Nunca invente versículos.', json: true, temperature: 1,
       schema: {
-        type: 'object', additionalProperties: false, required: ['texto', 'referencia', 'tag', 'legenda'],
-        properties: { texto: { type: 'string' }, referencia: { type: 'string' }, tag: { type: 'string' }, legenda: { type: 'string' } },
+        type: 'object', additionalProperties: false, required: ['texto', 'referencia', 'tag', 'legenda', 'cena'],
+        properties: { texto: { type: 'string' }, referencia: { type: 'string' }, tag: { type: 'string' }, legenda: { type: 'string' }, cena: { type: 'string' } },
       },
     });
     const j = JSON.parse(txt.replace(/^```(json)?|```$/g, '').trim());
     if (!j.texto) throw new Error('Resposta inválida');
-    return { quote: j.texto.replace(/^["“]|["”]$/g, ''), ref: j.referencia || '', tag: j.tag || 'Palavra do Dia', caption: j.legenda || buildCaption(j.texto, j.referencia), source: 'ia' };
+    return { quote: j.texto.replace(/^["“]|["”]$/g, ''), ref: j.referencia || '', tag: j.tag || 'Palavra do Dia', caption: j.legenda || buildCaption(j.texto, j.referencia), scene: j.cena || '', source: 'ia' };
   }
 
-  let createState = { format: 'post', busy: false };
+  // ---------- Bom dia da loja (um por dia da semana) ----------
+  const WEEKDAY_NAMES = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
+  const WEEKDAY_SHORT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+  const WEEKDAY_THEMES = ['gratidão e descanso em família', 'recomeço, foco e planejamento', 'persistência e constância', 'ânimo no meio da semana', 'confiança e fé no resultado', 'gratidão pela semana e celebração', 'atendimento, alegria e boas escolhas'];
+  const BOMDIA_LOCAL = [
+    ['Bom domingo! Dia de descansar, agradecer e recarregar a fé.', 'Domingo é dia de gratidão: Deus cuidou de cada detalhe da semana.'],
+    ['Bom dia! Segunda é página em branco: escreva com fé e atitude.', 'Nova semana, novas bênçãos. Comece com Deus e o resto se alinha.'],
+    ['Bom dia! Constância vence pressa. Bora fazer a terça valer.', 'Terça de foco: um passo de cada vez, sempre com Deus.'],
+    ['Bom dia! Metade da semana, o dobro de fé.', 'Quarta-feira: o que Deus começou, Ele termina. Bom dia!'],
+    ['Bom dia! Quem confia em Deus e trabalha certo não para no meio do caminho.', 'Quinta de confiança: o melhor ainda está por vir.'],
+    ['Sextou com gratidão! Bom dia e uma ótima sexta para você.', 'Bom dia! Sexta é dia de agradecer cada conquista da semana.'],
+    ['Bom sábado! Que hoje sobre sorriso, paz e boas notícias.', 'Sábado abençoado! Aproveite o dia e conte com a gente.'],
+  ];
+  const PHOTO_SCENES = {
+    palavra: [
+      'a small child kneeling beside a bed praying with folded hands, dim warm lamp light, cozy bedroom at night',
+      'hands of a man folded in prayer over an open bible on a wooden desk, warm window light, dust particles in the air',
+      'a businessman praying alone in a dark office at night, city lights through the window',
+      'a woman reading a bible by a window at sunrise, golden hour light',
+      'old empty wooden church interior with light rays through tall windows',
+      'a man standing on a mountain top at sunrise with open arms, silhouette, epic sky',
+      'father and son praying together at a dinner table, warm candle light',
+      'an entrepreneur opening the door of a small shop at dawn, warm hopeful light',
+    ],
+    bomdia: [
+      'cozy modern cell phone repair shop in the morning, technician repairing a smartphone with precision tools on a workbench, warm sunlight',
+      'storefront of a modern smartphone store at sunrise, glass display with phones, warm golden light',
+      'a cup of coffee next to a smartphone on a wooden counter of a phone store, morning sunlight, bokeh',
+      'close up of hands holding a new smartphone, soft morning light, shallow depth of field',
+      'a friendly phone store owner smiling behind the counter in the morning, warm light',
+    ],
+  };
+  const PHOTO_STYLE = ', cinematic photography, moody warm light, film grain, shallow depth of field, emotional, photorealistic, vertical 9:16 composition with empty space at the top, no text, no letters, no logos, no watermark';
+
+  const storeName = () => (S.settings.storeName || '').trim();
+  function bomdiaCaption(day, frase) {
+    const loja = storeName() || 'nossa loja';
+    const tag = (storeName() || 'loja').toLowerCase().replace(/[^a-z0-9]/g, '');
+    return `☀️ ${frase}\n\nAqui na ${loja} a gente começa o dia pedindo a bênção de Deus e pronto para cuidar de você e do seu celular. 📲\n\nPrecisa de assistência técnica, acessórios ou de um aparelho novo? Chama no direct ou no WhatsApp! 💬\n\n#bomdia #${WEEKDAY_NAMES[day].toLowerCase().replace(/[^a-zà-ú]/g, '')} #${tag} #assistenciatecnica #celular #iphone #acessorios #fe`;
+  }
+  function getBomDia(day) {
+    S.bomdia = S.bomdia || {};
+    const wk = weekNum();
+    if (!S.bomdia[day] || S.bomdia[day].week !== wk) {
+      const frase = pick(BOMDIA_LOCAL[day], wk);
+      S.bomdia[day] = { week: wk, quote: frase, ref: '', tag: WEEKDAY_NAMES[day], caption: bomdiaCaption(day, frase), scene: pick(PHOTO_SCENES.bomdia, wk + day), source: 'local', bg: pick(Creative.backgrounds, wk + day).id };
+      save();
+    }
+    return S.bomdia[day];
+  }
+  async function aiBomDia(day) {
+    const loja = storeName() || 'uma loja de celulares';
+    const prompt = `Crie uma mensagem de BOM DIA para ${WEEKDAY_NAMES[day]} para o Instagram da ${loja} (${S.settings.storeNiche || 'loja de celulares e assistência técnica'}${S.settings.storeCity ? ', em ' + S.settings.storeCity : ''}).
+Tom: motivacional, positivo, com fé cristã leve e natural (sem pregação), ligado ao tema do dia: ${WEEKDAY_THEMES[day]}.
+Responda SOMENTE em JSON: {"frase": "mensagem de bom dia curta e marcante para a arte, no máximo 110 caracteres", "legenda": "legenda para Instagram com 3 a 4 frases, citando a loja de forma natural, uma chamada para ação (assistência técnica, acessórios ou aparelhos) e 8 hashtags em português", "cena": "descrição EM INGLÊS de uma foto cinematográfica para o fundo da arte, ligada a celulares/loja/manhã/fé, sem texto"}`;
+    const txt = await gemini([{ role: 'user', parts: [{ text: prompt }] }], {
+      system: 'Você é um social media brasileiro especialista em conteúdo para lojas de celular, com valores cristãos.', json: true, temperature: 1,
+      schema: { type: 'object', additionalProperties: false, required: ['frase', 'legenda', 'cena'], properties: { frase: { type: 'string' }, legenda: { type: 'string' }, cena: { type: 'string' } } },
+    });
+    const j = JSON.parse(txt.replace(/^```(json)?|```$/g, '').trim());
+    if (!j.frase) throw new Error('Resposta inválida');
+    return { quote: j.frase.replace(/^["“]|["”]$/g, ''), caption: j.legenda || bomdiaCaption(day, j.frase), scene: j.cena || pick(PHOTO_SCENES.bomdia, Date.now()), source: 'ia' };
+  }
+
+  // ---------- Foto de fundo (IA ou galeria) ----------
+  const photos = { palavra: null, bomdia: null };
+  const photoKey = (mode) => `bde:photo:${mode}`;
+  function loadPhoto(mode) {
+    if (photos[mode]) return Promise.resolve(photos[mode]);
+    let data = null;
+    try { data = localStorage.getItem(photoKey(mode)); } catch { /* sem armazenamento */ }
+    if (!data) return Promise.resolve(null);
+    return imgFrom(data).then((img) => (photos[mode] = img)).catch(() => null);
+  }
+  function imgFrom(src) {
+    return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
+  }
+  async function storePhoto(mode, src) {
+    const img = await imgFrom(src);
+    // normaliza para 1080x1920 JPEG (cabe no armazenamento do aparelho)
+    const cv = document.createElement('canvas'); cv.width = 1080; cv.height = 1920;
+    const ctx = cv.getContext('2d');
+    const r = Math.max(1080 / img.width, 1920 / img.height);
+    ctx.drawImage(img, (1080 - img.width * r) / 2, (1920 - img.height * r) / 2, img.width * r, img.height * r);
+    const data = cv.toDataURL('image/jpeg', 0.84);
+    try { localStorage.setItem(photoKey(mode), data); } catch { /* sem espaço: fica só na memória */ }
+    photos[mode] = await imgFrom(data);
+  }
+  const blobToDataURL = (b) => new Promise((res) => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(b); });
+
+  async function geminiImage(prompt) {
+    const key = (S.settings.apiKey || '').trim();
+    if (!key) throw new Error('sem chave do Gemini');
+    const list = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?pageSize=200&key=${encodeURIComponent(key)}`).then((r) => r.json());
+    const names = (list.models || []).filter((m) => (m.supportedGenerationMethods || []).includes('generateContent')).map((m) => m.name.replace(/^models\//, ''))
+      .filter((n) => /image/.test(n) && /gemini/.test(n));
+    names.sort((a, b) => (/flash/.test(b) - /flash/.test(a)) || b.localeCompare(a));
+    for (const model of names.slice(0, 3)) {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }], generationConfig: { responseModalities: ['IMAGE'], imageConfig: { aspectRatio: '9:16' } } }),
+      });
+      if (!res.ok) continue;
+      const data = await res.json();
+      const part = (data.candidates?.[0]?.content?.parts || []).find((p) => p.inlineData?.data);
+      if (part) return `data:${part.inlineData.mimeType || 'image/png'};base64,${part.inlineData.data}`;
+    }
+    throw new Error('Gemini sem geração de imagem disponível');
+  }
+  async function freeImage(prompt) {
+    // serviço gratuito Pollinations (sem chave)
+    const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=1080&height=1920&nologo=true&seed=${Math.floor(Math.random() * 1e6)}`;
+    const ctrl = new AbortController(); const t = setTimeout(() => ctrl.abort(), 90000);
+    try {
+      const res = await fetch(url, { signal: ctrl.signal });
+      if (!res.ok || !(res.headers.get('content-type') || '').startsWith('image')) throw new Error('falhou');
+      return await blobToDataURL(await res.blob());
+    } finally { clearTimeout(t); }
+  }
+  async function generatePhoto(mode) {
+    const c = cur();
+    const prompt = (c.scene || pick(PHOTO_SCENES[mode], Date.now())) + PHOTO_STYLE;
+    let src = null;
+    if (S.settings.provider !== 'claude' && S.settings.apiKey) { try { src = await geminiImage(prompt); } catch { /* tenta o gratuito */ } }
+    if (!src) src = await freeImage(prompt);
+    await storePhoto(mode, src);
+  }
+
+  // ---------- Estado do estúdio ----------
+  let createState = { format: 'post', busy: false, photoBusy: false, mode: 'palavra', day: new Date().getDay() };
+  const cur = () => (createState.mode === 'bomdia' ? getBomDia(createState.day) : getDailyCreative());
+  function setCur(obj) {
+    if (createState.mode === 'bomdia') { Object.assign(getBomDia(createState.day), obj); save(); } else setCreative(obj);
+  }
+  const style = () => S.settings.postStyle || 'classic';
 
   function renderCreate() {
-    const c = getDailyCreative();
+    getDailyCreative();
+    const c = cur();
     if (S.creativeSeen !== dateKey()) { S.creativeSeen = dateKey(); save(); }
+    const bomdia = createState.mode === 'bomdia';
+    const photoStyle = style() === 'photo';
     const el = $('#view-create');
     el.innerHTML = `
       ${pageHead('create', 'Estúdio de Posts', 'Post e stories novos todos os dias.')}
+      <div class="seg" style="margin-bottom:10px">
+        <button class="${!bomdia ? 'active' : ''}" data-mode="palavra">📖 Palavra do dia</button>
+        <button class="${bomdia ? 'active' : ''}" data-mode="bomdia">☀️ Bom dia da loja</button>
+      </div>
+      ${bomdia ? `<div class="chips" style="margin-bottom:10px">${WEEKDAY_SHORT.map((d, i) => `<button class="chip ${createState.day === i ? 'active' : ''}" data-day="${i}">${d}${i === new Date().getDay() ? ' · hoje' : ''}</button>`).join('')}</div>
+        ${!storeName() ? '<p class="notice" style="margin:0 0 12px">Coloque o nome da sua loja em <b>Ajustes → Sua empresa</b> para a IA citar a loja nas mensagens.</p>' : ''}` : ''}
       <div class="seg" style="margin-bottom:14px">
         <button class="${createState.format === 'post' ? 'active' : ''}" data-fmt="post">Post 4:5</button>
         <button class="${createState.format === 'story' ? 'active' : ''}" data-fmt="story">Stories 9:16</button>
       </div>
       <div class="preview-wrap ${createState.format === 'story' ? 'story' : ''}"><canvas id="cv"></canvas></div>
       <div class="row" style="justify-content:center;margin-bottom:6px">
-        <span class="chip">${c.source === 'ia' ? '✨ Criado por IA' : c.ref ? '📖 Versículo' : '💡 Reflexão'}</span>
+        <span class="chip">${c.source === 'ia' ? '✨ Texto criado por IA' : bomdia ? '☀️ Bom dia' : c.ref ? '📖 Versículo' : '💡 Reflexão'}</span>
       </div>
-      <div class="section-title">Fundo</div>
-      <div class="bg-picker">${Creative.backgrounds.map((b) => `<button class="bg-thumb ${c.bg === b.id ? 'active' : ''}" data-bg="${b.id}" title="${esc(b.name)}"><canvas data-thumb="${b.id}"></canvas></button>`).join('')}</div>
-      <div class="row wrap" style="margin-top:6px">
+
+      <div class="section-title">Estilo da arte</div>
+      <div class="seg" style="margin-bottom:12px">
+        <button class="${!photoStyle ? 'active' : ''}" data-style="classic">Fundos elegantes</button>
+        <button class="${photoStyle ? 'active' : ''}" data-style="photo">Foto + manuscrito</button>
+      </div>
+      ${photoStyle ? `
+        <div class="row wrap">
+          <button class="btn sm primary" data-act="gen-photo" ${createState.photoBusy ? 'disabled' : ''}>${createState.photoBusy ? 'Gerando foto… (até 1 min)' : '✨ Gerar foto com IA'}</button>
+          <label class="btn sm ghost" style="cursor:pointer">🖼️ Usar minha foto<input type="file" accept="image/*" id="photo-file" hidden></label>
+        </div>
+        <p class="small muted" style="margin:8px 2px 0">A IA cria uma foto cinematográfica combinando com a mensagem. Você também pode usar uma foto da sua loja.</p>`
+      : `<div class="bg-picker">${Creative.backgrounds.map((b) => `<button class="bg-thumb ${c.bg === b.id ? 'active' : ''}" data-bg="${b.id}" title="${esc(b.name)}"><canvas data-thumb="${b.id}"></canvas></button>`).join('')}</div>`}
+
+      <div class="row wrap" style="margin-top:16px">
         <button class="btn ig" data-act="story" style="flex:1">📲 Postar no Stories</button>
         <button class="btn wa" data-act="wa" style="flex:1"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm5.8 14.1c-.2.7-1.4 1.3-2 1.4-.5.1-1.2.1-1.9-.1-.4-.1-1-.3-1.7-.6-3-1.3-4.9-4.3-5.1-4.5-.1-.2-1.2-1.6-1.2-3.1s.8-2.2 1-2.5c.3-.3.6-.4.8-.4h.6c.2 0 .4 0 .6.5l.9 2.1c.1.1.1.3 0 .5l-.3.5-.4.5c-.1.1-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.2 1 2.1 1.4 2.4 1.5.3.1.5.1.6-.1l.9-1.1c.2-.3.4-.2.6-.1l2 .9c.3.1.5.2.5.3.1.1.1.7-.1 1.4z"/></svg> WhatsApp</button>
       </div>
@@ -983,55 +1138,77 @@ Responda SOMENTE em JSON: {"texto": "no máximo 170 caracteres", "referencia": "
         <button class="btn" data-act="download" style="flex:1">Baixar ${createState.format === 'post' ? 'post' : 'stories'}</button>
       </div>
       <button class="btn block ghost" data-act="download-both" style="margin-top:10px">⬇ Baixar post + stories</button>
+
       <div class="section-title">Texto</div>
       <div class="row wrap">
-        <button class="btn sm" data-act="ai" ${createState.busy ? 'disabled' : ''}>${createState.busy ? 'Criando…' : '✨ Gerar com IA'}</button>
-        <button class="btn sm" data-act="proverb">📖 Provérbio</button>
-        <button class="btn sm" data-act="frase">💡 Frase</button>
+        <button class="btn sm" data-act="ai" ${createState.busy ? 'disabled' : ''}>${createState.busy ? 'Criando…' : bomdia ? `✨ Criar bom dia de ${WEEKDAY_SHORT[createState.day].toLowerCase()} com IA` : '✨ Gerar com IA'}</button>
+        ${bomdia ? '<button class="btn sm" data-act="bomdia-local">🔄 Outra frase</button>' : '<button class="btn sm" data-act="proverb">📖 Provérbio</button><button class="btn sm" data-act="frase">💡 Frase</button>'}
         <button class="btn sm" data-act="edit">✏️ Editar</button>
       </div>
       <div class="section-title">Legenda</div>
       <div class="caption-box">${esc(c.caption)}</div>
       <button class="btn sm" style="margin-top:10px" data-act="copy-caption">Copiar legenda</button>
-      ${!hasAI() ? '<p class="notice" style="margin-top:16px">Dica: adicione sua chave gratuita do Gemini em Ajustes para que a IA crie um texto novo e exclusivo todos os dias.</p>' : ''}
+      ${!hasAI() ? '<p class="notice" style="margin-top:16px">Dica: adicione sua chave gratuita do Gemini em Ajustes para que a IA crie textos e fotos novos todos os dias.</p>' : ''}
     `;
-    Creative.ensureFonts().then(() => {
+    Creative.ensureFonts().then(async () => {
+      if (photoStyle) await loadPhoto(createState.mode);
       drawPreview();
       el.querySelectorAll('[data-thumb]').forEach((cv) => Creative.thumb(cv, cv.dataset.thumb));
     });
-    // IA cria automaticamente uma vez por dia
-    if (hasAI() && S.settings.aiPosts && !c.aiTried && c.source === 'local') {
-      c.aiTried = true; save();
+    // IA cria automaticamente o texto da Palavra uma vez por dia
+    const daily = getDailyCreative();
+    if (!bomdia && hasAI() && S.settings.aiPosts && !daily.aiTried && daily.source === 'local') {
+      daily.aiTried = true; save();
       runAI(true);
     }
   }
 
   function renderOpts(format) {
-    const c = getDailyCreative();
-    return { format, bg: c.bg, seed: dayNum(), quote: c.quote, ref: c.ref, tag: c.tag, date: shortDate(), handle: S.settings.handle };
+    const c = cur();
+    const bomdia = createState.mode === 'bomdia';
+    return {
+      format, bg: c.bg, seed: bomdia ? weekNum() + createState.day : dayNum(), quote: c.quote, ref: c.ref, tag: c.tag,
+      date: bomdia ? '' : shortDate(), handle: S.settings.handle,
+      brand: bomdia && storeName() ? storeName() : 'Bíblia do Empreendedor',
+      photo: photos[createState.mode],
+    };
+  }
+  function paint(cv, format) {
+    const o = renderOpts(format);
+    return style() === 'photo' ? Creative.renderPhoto(cv, o) : Creative.render(cv, o);
   }
   function drawPreview() {
     const cv = $('#cv');
-    if (cv) Creative.render(cv, renderOpts(createState.format));
+    if (cv) paint(cv, createState.format);
   }
 
   async function runAI(auto = false) {
+    const mode = createState.mode, day = createState.day;
     createState.busy = true;
     if (current === 'create') renderCreate();
     try {
-      const r = await aiCreative();
-      setCreative(r);
+      if (mode === 'bomdia') { Object.assign(getBomDia(day), await aiBomDia(day)); save(); }
+      else setCreative(await aiCreative());
       if (!auto) toast('Novo texto criado ✨');
     } catch (e) {
-      if (!auto) toast(e.message === 'NO_KEY' ? 'Configure a chave do Gemini em Ajustes' : 'IA indisponível agora');
+      if (!auto) toast(e.message === 'NO_KEY' ? 'Configure a IA em Ajustes' : 'IA indisponível agora');
     }
     createState.busy = false;
     if (current === 'create') renderCreate();
   }
 
+  async function runPhoto() {
+    const mode = createState.mode;
+    createState.photoBusy = true; renderCreate();
+    try { await generatePhoto(mode); toast('Foto criada ✨'); }
+    catch { toast('Não consegui gerar a foto agora. Tente de novo ou use uma foto sua.'); }
+    createState.photoBusy = false;
+    if (current === 'create') renderCreate();
+  }
+
   function canvasBlob(format) {
     const cv = document.createElement('canvas');
-    Creative.render(cv, renderOpts(format));
+    paint(cv, format);
     return new Promise((res) => cv.toBlob(res, 'image/png'));
   }
   function download(blob, name) {
@@ -1041,22 +1218,36 @@ Responda SOMENTE em JSON: {"texto": "no máximo 170 caracteres", "referencia": "
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 4000);
   }
-  const fileName = (format) => `biblia-do-empreendedor-${format === 'post' ? 'post' : 'stories'}-${dateKey()}.png`;
+  const fileName = (format) => `${createState.mode === 'bomdia' ? 'bom-dia' : 'palavra'}-${format === 'post' ? 'post' : 'stories'}-${dateKey()}.png`;
+
+  $('#view-create').addEventListener('change', async (e) => {
+    if (e.target.id !== 'photo-file' || !e.target.files[0]) return;
+    try { await storePhoto(createState.mode, await blobToDataURL(e.target.files[0])); toast('Foto aplicada'); }
+    catch { toast('Não consegui abrir essa imagem'); }
+    renderCreate();
+  });
 
   $('#view-create').addEventListener('click', async (e) => {
+    const m = e.target.closest('[data-mode]');
+    if (m) { createState.mode = m.dataset.mode; renderCreate(); return; }
+    const d = e.target.closest('[data-day]');
+    if (d) { createState.day = +d.dataset.day; renderCreate(); return; }
+    const st = e.target.closest('[data-style]');
+    if (st) { S.settings.postStyle = st.dataset.style; save(); renderCreate(); return; }
     const f = e.target.closest('[data-fmt]');
     if (f) { createState.format = f.dataset.fmt; renderCreate(); return; }
     const bgb = e.target.closest('[data-bg]');
     if (bgb) {
-      setCreative({ bg: bgb.dataset.bg });
+      setCur({ bg: bgb.dataset.bg });
       document.querySelectorAll('.bg-thumb').forEach((x) => x.classList.toggle('active', x === bgb));
       drawPreview(); return;
     }
     const a = e.target.closest('[data-act]');
     if (!a) return;
     await Creative.ensureFonts();
-    const c = getDailyCreative();
+    const c = cur();
     switch (a.dataset.act) {
+      case 'gen-photo': runPhoto(); break;
       case 'download': download(await canvasBlob(createState.format), fileName(createState.format)); toast('Imagem salva'); break;
       case 'download-both':
         download(await canvasBlob('post'), fileName('post'));
@@ -1101,6 +1292,13 @@ Responda SOMENTE em JSON: {"texto": "no máximo 170 caracteres", "referencia": "
       }
       case 'copy-caption': copy(c.caption); break;
       case 'ai': runAI(false); break;
+      case 'bomdia-local': {
+        const day = createState.day;
+        const opts = BOMDIA_LOCAL[day].filter((x) => x !== c.quote);
+        const fr = opts[Math.floor(Math.random() * opts.length)] || BOMDIA_LOCAL[day][0];
+        setCur({ quote: fr, caption: bomdiaCaption(day, fr), source: 'local' });
+        renderCreate(); break;
+      }
       case 'proverb': {
         const p = PROVERBS[Math.floor(Math.random() * PROVERBS.length)];
         setCreative({ quote: p.texto, ref: p.ref, tag: 'Palavra do Dia', caption: buildCaption(p.texto, p.ref), source: 'local' });
@@ -1116,16 +1314,17 @@ Responda SOMENTE em JSON: {"texto": "no máximo 170 caracteres", "referencia": "
   });
 
   function editSheet() {
-    const c = getDailyCreative();
+    const c = cur();
     openSheet(`
       <h3>Editar texto</h3>
       <div class="field"><label>Tag do topo</label><input id="ed-tag" value="${esc(c.tag)}"></div>
       <div class="field"><label>Mensagem</label><textarea id="ed-quote" rows="4">${esc(c.quote)}</textarea></div>
       <div class="field"><label>Referência (opcional)</label><input id="ed-ref" value="${esc(c.ref)}" placeholder="Ex.: Provérbios 16:3"></div>
       <div class="field"><label>Legenda</label><textarea id="ed-cap" rows="6">${esc(c.caption)}</textarea></div>
+      <div class="field"><label>Cena da foto (para a IA, em inglês)</label><textarea id="ed-scene" rows="2" placeholder="ex.: child praying by the bed, warm lamp light">${esc(c.scene || '')}</textarea></div>
       <button class="btn primary block" id="ed-save">Aplicar</button>`);
     $('#ed-save').onclick = () => {
-      setCreative({ tag: $('#ed-tag').value.trim(), quote: $('#ed-quote').value.trim() || c.quote, ref: $('#ed-ref').value.trim(), caption: $('#ed-cap').value });
+      setCur({ tag: $('#ed-tag').value.trim(), quote: $('#ed-quote').value.trim() || c.quote, ref: $('#ed-ref').value.trim(), caption: $('#ed-cap').value, scene: $('#ed-scene').value.trim() });
       closeSheet(); renderCreate();
     };
   }
@@ -1213,9 +1412,12 @@ Responda SOMENTE em JSON: {"texto": "no máximo 170 caracteres", "referencia": "
         </div>
       </div>
 
-      <div class="section-title">Posts</div>
+      <div class="section-title">Sua empresa</div>
       <div class="card">
-        <div class="field"><label>Seu @ no Instagram (aparece nas artes)</label><input id="st-handle" value="${esc(s.handle)}" placeholder="@seuperfil"></div>
+        <div class="field"><label>Nome da loja / empresa</label><input id="st-store" value="${esc(s.storeName || '')}" placeholder="Ex.: RB Tech Celulares"></div>
+        <div class="field"><label>Segmento</label><input id="st-niche" value="${esc(s.storeNiche || 'loja de celulares e assistência técnica')}"></div>
+        <div class="field"><label>Cidade (opcional)</label><input id="st-city" value="${esc(s.storeCity || '')}" placeholder="Ex.: Florianópolis"></div>
+        <div class="field" style="margin:0"><label>Seu @ no Instagram (aparece nas artes)</label><input id="st-handle" value="${esc(s.handle)}" placeholder="@seuperfil"></div>
       </div>
 
       <button class="btn primary block" data-act="save">Salvar ajustes</button>
@@ -1260,6 +1462,10 @@ Responda SOMENTE em JSON: {"texto": "no máximo 170 caracteres", "referencia": "
       if (s.translation !== $('#st-tr').value) { s.translation = $('#st-tr').value; reader = { verses: null, loading: false, error: null, sel: null }; }
       s.goal = +$('#st-goal').value;
       s.handle = $('#st-handle').value.trim();
+      s.storeName = $('#st-store').value.trim();
+      s.storeNiche = $('#st-niche').value.trim();
+      s.storeCity = $('#st-city').value.trim();
+      S.bomdia = {}; // regenera os bons dias com o nome novo
       if (s.handle && !s.handle.startsWith('@')) s.handle = '@' + s.handle;
       save();
     };

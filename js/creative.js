@@ -303,6 +303,7 @@ const Creative = (() => {
         document.fonts.load('900 40px "Cinzel"'),
         document.fonts.load('600 40px "Cormorant Garamond"'),
         document.fonts.load('italic 600 40px "Cormorant Garamond"'),
+        document.fonts.load('400 40px "Patrick Hand SC"'),
       ]);
     } catch (e) { /* segue com fontes padrão */ }
   }
@@ -368,11 +369,88 @@ const Creative = (() => {
     const fy = H - (story ? 300 : 130);
     ctx.fillStyle = light ? C.ink : C.a;
     ctx.font = '900 30px "Cinzel"';
-    spaced(ctx, 'BÍBLIA DO EMPREENDEDOR', cx, fy, 6);
+    spaced(ctx, (opts.brand || 'BÍBLIA DO EMPREENDEDOR').toUpperCase(), cx, fy, 6);
     if (opts.handle) {
       ctx.font = '600 26px "Inter", sans-serif'; ctx.fillStyle = light ? '#333' : `rgba(${C.lrgb},.8)`;
       ctx.fillText(opts.handle, cx, fy + 46);
     }
+    return canvas;
+  }
+
+  // ---------- Estilo "foto + manuscrito" (foto cinematográfica com frase escrita à mão) ----------
+  const HAND = '"Patrick Hand SC", "Comic Sans MS", cursive';
+  function wrapSpaced(ctx, text, maxW, sp) {
+    const words = text.split(/\s+/);
+    const width = (t) => ctx.measureText(t).width + sp * Math.max(0, [...t].length - 1);
+    const lines = []; let line = '';
+    for (const w of words) {
+      const test = line ? line + ' ' + w : w;
+      if (width(test) > maxW && line) { lines.push(line); line = w; } else line = test;
+    }
+    if (line) lines.push(line);
+    return lines;
+  }
+  function drawCover(ctx, img, W, H) {
+    const r = Math.max(W / img.width, H / img.height);
+    const w = img.width * r, h = img.height * r;
+    ctx.drawImage(img, (W - w) / 2, (H - h) / 2, w, h);
+  }
+  function renderPhoto(canvas, opts) {
+    const story = opts.format === 'story';
+    const W = 1080, H = story ? 1920 : 1350;
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext('2d');
+    if (opts.photo) drawCover(ctx, opts.photo, W, H);
+    else {
+      const g = ctx.createLinearGradient(0, 0, 0, H);
+      g.addColorStop(0, '#1b1712'); g.addColorStop(1, '#050505');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    }
+    // escurece para leitura (mais forte no topo, onde fica o texto) + vinheta
+    ctx.fillStyle = 'rgba(0,0,0,.22)'; ctx.fillRect(0, 0, W, H);
+    let g = ctx.createLinearGradient(0, 0, 0, H * 0.65);
+    g.addColorStop(0, 'rgba(0,0,0,.6)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    vignette(ctx, W, H, 0.55);
+
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const cx = W / 2;
+    const text = (opts.quote || '').toUpperCase();
+    const maxW = W * 0.74;
+    let size = story ? 70 : 64, lines, lh, sp;
+    for (; size >= 32; size -= 2) {
+      ctx.font = `400 ${size}px ${HAND}`;
+      sp = size * 0.14;
+      lines = wrapSpaced(ctx, text, maxW, sp);
+      lh = size * 1.6;
+      if (lines.length * lh <= H * (story ? 0.3 : 0.34)) break;
+    }
+    const centerY = H * (story ? 0.3 : 0.32);
+    let y = centerY - ((lines.length - 1) * lh) / 2;
+    ctx.fillStyle = '#ffffff';
+    ctx.shadowColor = 'rgba(0,0,0,.75)'; ctx.shadowBlur = 16;
+    if (opts.tag) {
+      ctx.font = `400 ${Math.round(size * 0.55)}px ${HAND}`;
+      ctx.fillStyle = C.l;
+      spaced(ctx, opts.tag.toUpperCase(), cx, y - lh * 1.05, size * 0.12);
+      ctx.fillStyle = '#ffffff';
+    }
+    ctx.font = `400 ${size}px ${HAND}`;
+    for (const l of lines) { spaced(ctx, l, cx, y, sp); y += lh; }
+    if (opts.ref) {
+      ctx.font = `400 ${Math.round(size * 0.6)}px ${HAND}`;
+      ctx.fillStyle = C.l;
+      spaced(ctx, opts.ref.toUpperCase(), cx, y + lh * 0.1, size * 0.1);
+    }
+    ctx.shadowBlur = 6;
+    // assinatura discreta
+    const sig = (opts.handle || opts.brand || '').toUpperCase();
+    if (sig) {
+      ctx.font = `400 24px ${HAND}`; ctx.fillStyle = 'rgba(255,255,255,.62)';
+      ctx.textAlign = 'left';
+      ctx.fillText(sig, W * 0.08, H - (story ? 300 : 120));
+    }
+    ctx.shadowBlur = 0;
     return canvas;
   }
 
@@ -384,5 +462,5 @@ const Creative = (() => {
     ctx.restore();
   }
 
-  return { backgrounds, render, thumb, ensureFonts, mulberry32, setAccent, mix, hexRgb };
+  return { backgrounds, render, renderPhoto, thumb, ensureFonts, mulberry32, setAccent, mix, hexRgb };
 })();
