@@ -29,7 +29,14 @@ A chave fica salva apenas no seu aparelho.
 python3 -m http.server 8080   # abra http://localhost:8080
 ```
 
-Para publicar grátis: GitHub Pages (Settings → Pages → branch `main`, pasta `/`), Netlify ou Vercel.
+### Publicar na Vercel (grátis)
+
+1. Entre em https://vercel.com e faça login com o GitHub
+2. **Add New… → Project** → importe o repositório `RIBIBLE`
+3. Framework Preset: **Other** · Build Command: vazio · Output Directory: vazio (raiz)
+4. Clique em **Deploy**
+
+A cada `git push` na `main`, a Vercel publica a nova versão automaticamente. O `vercel.json` já está configurado.
 
 ## Créditos
 
