@@ -294,6 +294,35 @@ const FRASES = [
   'Crescer é bom. Crescer com propósito é extraordinário.',
 ];
 
+// Frases motivacionais curtas (estilo paisagem)
+const MOTIVACIONAIS = [
+  'coragem não é ausência de medo, é dar o próximo passo com Deus.',
+  'quem planta em silêncio colhe em público.',
+  'o processo dói, mas forma quem você vai ser.',
+  'não pare porque está difícil. pare quando estiver pronto.',
+  'devagar também se chega. o importante é não voltar.',
+  'tempestades não duram para sempre. você sim.',
+  'disciplina é lembrar o que você quer quando ninguém está vendo.',
+  'a vitória começa no dia em que você decide não desistir.',
+  'o mar calmo nunca formou bons navegantes.',
+  'quem tem raiz não tem medo do vento.',
+  'faça hoje o que seu futuro vai agradecer.',
+  'nem todo atraso é derrota. às vezes é proteção.',
+  'cansar é permitido. desistir não.',
+  'seu ritmo não precisa ser o dos outros.',
+  'grandes coisas começam com um sim pequeno.',
+  'o céu fica mais bonito depois da chuva.',
+  'confie no processo, mesmo quando não entende o caminho.',
+  'você não chegou até aqui para parar agora.',
+  'constância vence talento que não aparece.',
+  'a montanha não diminui. você é que fica mais forte.',
+  'quem caminha com Deus nunca caminha sozinho.',
+  'o que é seu está sendo preparado. continue.',
+  'seja firme como a rocha e leve como o vento.',
+  'recomeçar também é coragem.',
+  'o sol sempre volta. sempre.',
+];
+
 // Tarefas cristãs para fazer o mundo melhor
 const TASKS = [
   { id: 't1', cat: 'Generosidade', t: 'Pague o café ou o lanche de alguém hoje.' },

@@ -1010,6 +1010,19 @@ Responda SOMENTE em JSON: {"texto": "no máximo 170 caracteres", "referencia": "
       'a friendly phone store owner smiling behind the counter in the morning, warm light',
     ],
   };
+  const LANDSCAPE_SCENES = [
+    'dramatic storm clouds over a dark rough sea, moody gray light',
+    'misty mountains at sunrise with soft golden light over the valleys',
+    'lonely road through a desert at sunset, long shadows',
+    'calm lake reflecting snowy mountains at dawn',
+    'lighthouse on rocky cliffs during a storm with crashing waves',
+    'pine forest in thick fog, soft diffused light',
+    'golden wheat field at sunset with dramatic clouds',
+    'starry night sky over mountains with the milky way',
+    'ocean waves at golden hour seen from the beach',
+    'a lone tree on a hill under a stormy sky',
+  ];
+  const LANDSCAPE_STYLE = ', epic landscape photography, cinematic, moody, high detail, photorealistic, vertical composition, no people, no text, no watermark';
   const PHOTO_STYLE = ', cinematic photography, moody warm light, film grain, shallow depth of field, emotional, photorealistic, vertical 9:16 composition with empty space at the top, no text, no letters, no logos, no watermark';
 
   const storeName = () => (S.settings.storeName || '').trim();
@@ -1100,7 +1113,9 @@ Responda SOMENTE em JSON: {"frase": "mensagem de bom dia curta e marcante para a
   }
   async function generatePhoto(mode) {
     const c = cur();
-    const prompt = (c.scene || pick(PHOTO_SCENES[mode], Date.now())) + PHOTO_STYLE;
+    const prompt = effStyle() === 'landscape'
+      ? (c.landScene || LANDSCAPE_SCENES[Math.floor(Math.random() * LANDSCAPE_SCENES.length)]) + LANDSCAPE_STYLE
+      : (c.scene || pick(PHOTO_SCENES[mode], Date.now())) + PHOTO_STYLE;
     let src = null;
     if (S.settings.provider !== 'claude' && S.settings.apiKey) { try { src = await geminiImage(prompt); } catch { /* tenta o gratuito */ } }
     if (!src) src = await freeImage(prompt);
@@ -1118,7 +1133,7 @@ Responda SOMENTE em JSON: {"frase": "mensagem de bom dia curta e marcante para a
   function effStyle() {
     const st = style();
     if (st !== 'auto') return st;
-    const opts = photos[createState.mode] ? ['card', 'photo', 'classic'] : ['card', 'classic'];
+    const opts = photos[createState.mode] ? ['card', 'landscape', 'photo', 'classic'] : ['card', 'landscape', 'classic'];
     const n = createState.mode === 'bomdia' ? weekNum() + createState.day : dayNum();
     return pick(opts, n);
   }
@@ -1136,7 +1151,7 @@ Responda SOMENTE em JSON: {"frase": "mensagem de bom dia curta e marcante para a
   const cardTint = () => (S.settings.cardTint ?? 10);
   const cardBlur = () => (S.settings.cardBlur ?? 40);
   const cardOpacity = () => (S.settings.cardOpacity ?? 93);
-  const textPos = () => S.settings.textPos ?? (effStyle() === 'photo' ? 32 : 50);
+  const textPos = () => S.settings.textPos ?? ({ photo: 32, landscape: 46 }[effStyle()] || 50);
 
   function renderCreate() {
     getDailyCreative();
@@ -1145,6 +1160,7 @@ Responda SOMENTE em JSON: {"frase": "mensagem de bom dia curta e marcante para a
     const bomdia = createState.mode === 'bomdia';
     const photoStyle = effStyle() === 'photo';
     const cardStyle = effStyle() === 'card';
+    const landStyle = effStyle() === 'landscape';
     const el = $('#view-create');
     const WA_ICON = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm5.8 14.1c-.2.7-1.4 1.3-2 1.4-.5.1-1.2.1-1.9-.1-.4-.1-1-.3-1.7-.6-3-1.3-4.9-4.3-5.1-4.5-.1-.2-1.2-1.6-1.2-3.1s.8-2.2 1-2.5c.3-.3.6-.4.8-.4h.6c.2 0 .4 0 .6.5l.9 2.1c.1.1.1.3 0 .5l-.3.5-.4.5c-.1.1-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.2 1 2.1 1.4 2.4 1.5.3.1.5.1.6-.1l.9-1.1c.2-.3.4-.2.6-.1l2 .9c.3.1.5.2.5.3.1.1.1.7-.1 1.4z"/></svg>';
     const slider = (id, label, min, max, val, unit = '%') => `
@@ -1171,7 +1187,7 @@ Responda SOMENTE em JSON: {"frase": "mensagem de bom dia curta e marcante para a
         <button class="btn primary block magic" data-act="ai-art" ${createState.artBusy ? 'disabled' : ''}>${createState.artBusy ? `⏳ ${esc(createState.artStep || 'Criando arte…')}` : '🪄 Arte com IA'}</button>
         <div class="ctl-row">
           <div class="mini-seg">
-            ${[['auto', '🔀 Variar'], ['card', 'Cartão'], ['photo', 'Foto'], ['classic', 'Fundos']].map(([k, n]) => `<button class="${style() === k ? 'active' : ''}" data-style="${k}">${n}</button>`).join('')}
+            ${[['auto', '🔀 Variar'], ['card', 'Cartão'], ['landscape', 'Paisagem'], ['photo', 'Foto'], ['classic', 'Fundos']].map(([k, n]) => `<button class="${style() === k ? 'active' : ''}" data-style="${k}">${n}</button>`).join('')}
           </div>
         </div>
         <div class="ctl-row">
@@ -1180,18 +1196,19 @@ Responda SOMENTE em JSON: {"frase": "mensagem de bom dia curta e marcante para a
         </div>
         ${photoStyle ? `
           ${slider('tint', 'Película', 0, 85, tintAmount())}`
+        : landStyle ? `${slider('landtint', 'Película', 0, 85, S.settings.landscapeTint ?? 25)}<p class="small muted" style="margin:0 2px">Paisagem: use 🖼️ Galeria com uma foto sua de paisagem ou ✨ Foto IA para gerar uma (céu, mar, montanha…).</p>`
         : cardStyle ? `
           ${slider('cardtint', 'Película', 0, 85, cardTint())}
           ${slider('blur', 'Desfoque', 0, 100, cardBlur())}
           ${slider('cardop', 'Cartão', 20, 100, cardOpacity())}`
         : `<div class="bg-picker mini">${Creative.backgrounds.map((b) => `<button class="bg-thumb ${c.bg === b.id ? 'active' : ''}" data-bg="${b.id}" title="${esc(b.name)}"><canvas data-thumb="${b.id}"></canvas></button>`).join('')}</div>`}
-        ${!cardStyle ? `<div class="ctl-row"><span class="sl-label">Letra</span><div class="chips mini" style="flex:1;min-width:0;padding:0">${Object.entries(Creative.FONTS).map(([k, f]) => `<button class="chip ${textFont() === k ? 'active' : ''}" data-font="${k}" style="font-family:${esc(f.css)}">${f.name}</button>`).join('')}</div></div>` : ''}
+        ${!cardStyle && !landStyle ? `<div class="ctl-row"><span class="sl-label">Letra</span><div class="chips mini" style="flex:1;min-width:0;padding:0">${Object.entries(Creative.FONTS).map(([k, f]) => `<button class="chip ${textFont() === k ? 'active' : ''}" data-font="${k}" style="font-family:${esc(f.css)}">${f.name}</button>`).join('')}</div></div>` : ''}
         ${slider('size', 'Tamanho', 60, 150, textScale())}
         ${slider('pos', 'Posição', 10, 85, textPos())}
 
         <div class="ctl-row" style="margin-top:4px">
           <button class="mbtn" data-act="ai" ${createState.busy ? 'disabled' : ''}>${createState.busy ? '⏳ Criando…' : '✨ Texto IA'}</button>
-          ${bomdia ? '<button class="mbtn" data-act="bomdia-local">🔄 Outra</button>' : '<button class="mbtn" data-act="proverb">📖 Provérbio</button><button class="mbtn" data-act="frase">💡 Frase</button>'}
+          ${bomdia ? '<button class="mbtn" data-act="bomdia-local">🔄 Outra</button>' : '<button class="mbtn" data-act="proverb">📖 Provérbio</button><button class="mbtn" data-act="frase">💡 Frase</button><button class="mbtn" data-act="motiv">💪 Motivação</button>'}
           <button class="mbtn" data-act="edit">✏️ Editar</button>
         </div>
         <div class="ctl-row share-row">
@@ -1245,6 +1262,7 @@ Responda SOMENTE em JSON: {"frase": "mensagem de bom dia curta e marcante para a
     const o = renderOpts(format);
     const st = effStyle();
     if (st === 'card') return Creative.renderCard(cv, { ...o, quote: o.cardQuote, brand: o.cardBrand, tintAmount: cardTint(), blur: cardBlur(), cardOpacity: cardOpacity() });
+    if (st === 'landscape') return Creative.renderLandscape(cv, { ...o, tintAmount: S.settings.landscapeTint ?? 25 });
     return st === 'photo' ? Creative.renderPhoto(cv, o) : Creative.render(cv, o);
   }
   function drawPreview() {
@@ -1268,17 +1286,20 @@ Responda SOMENTE em JSON: {"frase": "mensagem de bom dia curta e marcante para a
   }
 
   // ---------- 🪄 Arte com IA: a IA monta a combinação completa ----------
-  const ART_STYLES = { cartao: 'card', foto: 'photo', fundos: 'classic' };
+  const ART_STYLES = { cartao: 'card', foto: 'photo', fundos: 'classic', paisagem: 'landscape' };
   function applyArt(a) {
     const st = S.settings;
     st.postStyle = ART_STYLES[a.estilo] || 'card';
     if (Creative.FONTS[a.letra]) st.textFont = a.letra; else delete st.textFont;
     st.photoTint = 'dark';
     const amt = Math.max(0, Math.min(80, Math.round(+a.intensidade || 35)));
-    if (st.postStyle === 'card') st.cardTint = Math.min(amt, 50); else st.photoTintAmount = amt;
+    if (st.postStyle === 'card') st.cardTint = Math.min(amt, 50);
+    else if (st.postStyle === 'landscape') st.landscapeTint = Math.min(amt, 45);
+    else st.photoTintAmount = amt;
     st.textScale = Math.max(70, Math.min(140, Math.round(+a.tamanho || 100)));
     st.textPos = Math.max(15, Math.min(80, Math.round(+a.posicao || (st.postStyle === 'photo' ? 32 : 50))));
     const content = { quote: (a.frase || '').replace(/^["“]|["”]$/g, ''), caption: a.legenda || '', scene: a.cena || '', title: a.titulo || '', source: 'ia' };
+    if (st.postStyle === 'landscape') { content.landScene = a.cena || ''; content.quote = content.quote.toLowerCase(); }
     if (createState.mode !== 'bomdia') Object.assign(content, { ref: a.referencia || '', tag: a.tag || 'Palavra do Dia' });
     if (Creative.backgrounds.some((b) => b.id === a.fundo)) content.bg = a.fundo;
     if (!content.quote) delete content.quote;
@@ -1290,10 +1311,12 @@ Responda SOMENTE em JSON: {"frase": "mensagem de bom dia curta e marcante para a
     const r = (arr) => arr[Math.floor(Math.random() * arr.length)];
     const bomdia = createState.mode === 'bomdia';
     const p = r(PROVERBS);
+    const estilo = r(['cartao', 'foto', 'fundos', 'paisagem']);
+    const motiv = estilo === 'paisagem' && !bomdia ? r(MOTIVACIONAIS) : null;
     return {
-      estilo: r(['cartao', 'foto', 'fundos']), letra: r(Object.keys(Creative.FONTS)), fundo: r(Creative.backgrounds).id,
+      estilo, letra: r(Object.keys(Creative.FONTS)), fundo: r(Creative.backgrounds).id,
       intensidade: 30 + Math.floor(Math.random() * 30), tamanho: 100, posicao: 0,
-      frase: bomdia ? r(BOMDIA_LOCAL[createState.day]) : p.texto, referencia: bomdia ? '' : p.ref, tag: 'Palavra do Dia', titulo: '',
+      frase: motiv || (bomdia ? r(BOMDIA_LOCAL[createState.day]) : p.texto), referencia: motiv || bomdia ? '' : p.ref, tag: 'Palavra do Dia', titulo: '',
       cena: r(PHOTO_SCENES[bomdia ? 'bomdia' : 'palavra']), legenda: bomdia ? bomdiaCaption(createState.day, r(BOMDIA_LOCAL[createState.day])) : buildCaption(p.texto, p.ref),
     };
   }
@@ -1307,7 +1330,8 @@ Responda SOMENTE em JSON: {"frase": "mensagem de bom dia curta e marcante para a
     const kind = bomdia ? 'bomdia' : 'palavra';
     const prompt = `Você é diretor de arte de Instagram. Crie UMA arte completa e harmoniosa para ${tema}. Ângulo desta vez: ${rnd(ANGLES)}.${avoidBlock(kind, [cur().quote])}
 Escolha a combinação que combina melhor com a mensagem:
-- estilo: "cartao" (foto desfocada + cartão claro com título e frase com marca-texto, delicado), "foto" (foto cinematográfica + frase grande por cima, emocionante) ou "fundos" (fundo gráfico elegante preto e dourado, sóbrio).
+- estilo: "cartao" (foto desfocada + cartão claro com título e frase com marca-texto, delicado), "foto" (foto cinematográfica + frase grande por cima, emocionante), "paisagem" (paisagem épica emoldurada + frase motivacional curta em letra forte, minúscula, alinhada à direita) ou "fundos" (fundo gráfico elegante preto e dourado, sóbrio).
+- se "paisagem": cena = paisagem sem pessoas (céu, mar, montanha, tempestade, estrada) e frase curta e direta, em minúsculas.
 - fundo (só para "fundos"): um destes ids: ${bgs}.
 - letra (para "foto" e "fundos"): um destes ids: ${fonts}.
 - intensidade da película escura sobre a foto: 0 a 80.
@@ -1318,7 +1342,7 @@ Responda SOMENTE em JSON: {"estilo": "", "fundo": "", "letra": "", "intensidade"
     const txt = await gemini([{ role: 'user', parts: [{ text: prompt }] }], {
       system: 'Você é um diretor de arte cristão, criativo e com bom gosto. Nunca invente versículos.', json: true, temperature: 1,
       schema: { type: 'object', additionalProperties: false, required: ['estilo', 'fundo', 'letra', 'intensidade', 'tamanho', 'posicao', 'frase', 'referencia', 'tag', 'titulo', 'cena', 'legenda'],
-        properties: { estilo: { type: 'string', enum: ['cartao', 'foto', 'fundos'] }, fundo: str, letra: str, intensidade: num, tamanho: num, posicao: num, frase: str, referencia: str, tag: str, titulo: str, cena: str, legenda: str } },
+        properties: { estilo: { type: 'string', enum: ['cartao', 'foto', 'fundos', 'paisagem'] }, fundo: str, letra: str, intensidade: num, tamanho: num, posicao: num, frase: str, referencia: str, tag: str, titulo: str, cena: str, legenda: str } },
     });
     const art = JSON.parse(txt.replace(/^```(json)?|```$/g, '').trim());
     rememberAI(kind, art.frase);
@@ -1371,6 +1395,7 @@ Responda SOMENTE em JSON: {"estilo": "", "fundo": "", "letra": "", "intensidade"
     if (id === 'size') S.settings.textScale = v;
     if (id === 'pos') S.settings.textPos = v;
     if (id === 'cardtint') S.settings.cardTint = v;
+    if (id === 'landtint') S.settings.landscapeTint = v;
     if (id === 'blur') S.settings.cardBlur = v;
     if (id === 'cardop') S.settings.cardOpacity = v;
     const lab = document.querySelector(`[data-slval="${id}"]`);
@@ -1470,6 +1495,11 @@ Responda SOMENTE em JSON: {"estilo": "", "fundo": "", "letra": "", "intensidade"
       case 'proverb': {
         const p = PROVERBS[Math.floor(Math.random() * PROVERBS.length)];
         setCreative({ quote: p.texto, ref: p.ref, tag: 'Palavra do Dia', caption: buildCaption(p.texto, p.ref), source: 'local' });
+        renderCreate(); break;
+      }
+      case 'motiv': {
+        const fr = MOTIVACIONAIS.filter((x) => x !== c.quote)[Math.floor(Math.random() * (MOTIVACIONAIS.length - 1))];
+        setCreative({ quote: fr, ref: '', tag: 'Motivação', title: '', caption: buildCaption(fr, ''), source: 'local' });
         renderCreate(); break;
       }
       case 'frase': {

@@ -639,6 +639,81 @@ const Creative = (() => {
     return canvas;
   }
 
+  // ---------- Estilo "Paisagem" (foto emoldurada + frase motivacional forte à direita) ----------
+  function landscapeFallback(W, H, seed) {
+    const c = document.createElement('canvas'); c.width = W; c.height = H;
+    const x = c.getContext('2d');
+    const rng = mulberry32(seed || 9);
+    let g = x.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, '#1d2126'); g.addColorStop(0.55, '#4d545c'); g.addColorStop(0.62, '#2b3035'); g.addColorStop(1, '#14171a');
+    x.fillStyle = g; x.fillRect(0, 0, W, H);
+    for (let i = 0; i < 70; i++) { // nuvens
+      const cx = rng() * W, cy = rng() * H * 0.45, r = 60 + rng() * 220;
+      const rg = x.createRadialGradient(cx, cy, 0, cx, cy, r);
+      rg.addColorStop(0, `rgba(${rng() > 0.5 ? '20,22,26' : '120,126,134'},${0.25 + rng() * 0.3})`); rg.addColorStop(1, 'rgba(0,0,0,0)');
+      x.fillStyle = rg; x.fillRect(cx - r, cy - r, r * 2, r * 2);
+    }
+    for (let y = H * 0.62; y < H; y += 10) { // mar
+      x.strokeStyle = `rgba(200,210,220,${0.04 + rng() * 0.12})`; x.lineWidth = 1 + rng() * 2;
+      x.beginPath(); x.moveTo(0, y); for (let xx = 0; xx <= W; xx += 40) x.lineTo(xx, y + Math.sin(xx / 60 + y) * 4); x.stroke();
+    }
+    return c;
+  }
+  function renderLandscape(canvas, opts) {
+    const story = opts.format === 'story';
+    const W = 1080, H = story ? 1920 : 1350;
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext('2d');
+    const src = opts.photo || landscapeFallback(1080, 1920, opts.seed);
+    // fundo: a mesma foto desfocada e escurecida
+    blurDraw(ctx, src, W, H, 70);
+    ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(0, 0, W, H);
+    // moldura com a foto nítida
+    const fx = W * 0.056, fw = W - fx * 2;
+    const fy = story ? H * 0.18 : H * 0.07, fh = story ? H * 0.64 : H * 0.8;
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = 40; ctx.shadowOffsetY = 12;
+    roundRect(ctx, fx, fy, fw, fh, 28); ctx.fillStyle = '#000'; ctx.fill();
+    ctx.restore();
+    ctx.save(); roundRect(ctx, fx, fy, fw, fh, 28); ctx.clip();
+    const r = Math.max(fw / src.width, fh / src.height);
+    ctx.drawImage(src, fx + (fw - src.width * r) / 2, fy + (fh - src.height * r) / 2, src.width * r, src.height * r);
+    const amt = Math.max(0, Math.min(0.85, (opts.tintAmount ?? 25) / 100));
+    ctx.fillStyle = `rgba(0,0,0,${amt})`; ctx.fillRect(fx, fy, fw, fh);
+    ctx.restore();
+
+    // frase forte, minúscula como escrita, alinhada à direita
+    const k = opts.textScale || 1;
+    const size = Math.round((story ? 74 : 70) * k);
+    const right = fx + fw - W * 0.09, maxW = fw * 0.8;
+    ctx.font = `700 ${size}px ${SANS}`;
+    ctx.textAlign = 'right'; ctx.textBaseline = 'alphabetic';
+    const lines = wrap(ctx, opts.quote || '', maxW);
+    const lh = size * 0.98;
+    const blockH = lines.length * lh;
+    let y = H * (opts.textPos ?? 0.46) - blockH / 2 + size * 0.8;
+    const sig = opts.handle || opts.brand || '';
+    ctx.shadowColor = 'rgba(0,0,0,.55)'; ctx.shadowBlur = 14;
+    if (sig) {
+      ctx.font = `600 ${Math.round(size * 0.32)}px ${SANS}`; ctx.fillStyle = 'rgba(255,255,255,.85)';
+      ctx.fillText(sig, right, y - size * 0.95);
+    }
+    ctx.font = `700 ${size}px ${SANS}`; ctx.fillStyle = '#ffffff';
+    for (const l of lines) { ctx.fillText(l, right, y); y += lh; }
+    if (opts.ref) {
+      ctx.font = `600 ${Math.round(size * 0.38)}px ${SANS}`; ctx.fillStyle = 'rgba(255,255,255,.85)';
+      ctx.fillText(opts.ref, right, y + size * 0.05);
+    }
+    // @ embaixo da moldura
+    if (sig) {
+      ctx.shadowBlur = 8; ctx.textAlign = 'left';
+      ctx.font = `600 ${story ? 30 : 26}px ${SANS}`; ctx.fillStyle = 'rgba(255,255,255,.9)';
+      ctx.fillText(sig, fx + 10, fy + fh + (story ? 60 : 42));
+    }
+    ctx.shadowBlur = 0;
+    return canvas;
+  }
+
   function thumb(canvas, bgId) {
     canvas.width = 120; canvas.height = 120;
     const ctx = canvas.getContext('2d');
@@ -647,5 +722,5 @@ const Creative = (() => {
     ctx.restore();
   }
 
-  return { backgrounds, FONTS, render, renderPhoto, renderCard, thumb, ensureFonts, mulberry32, setAccent, mix, hexRgb };
+  return { backgrounds, FONTS, render, renderPhoto, renderCard, renderLandscape, thumb, ensureFonts, mulberry32, setAccent, mix, hexRgb };
 })();
