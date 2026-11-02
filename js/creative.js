@@ -473,12 +473,39 @@ const Creative = (() => {
 
   // ---------- Estilo "Cartão" (foto desfocada + cartão claro com marca-texto) ----------
   const SANS = '"Inter", system-ui, -apple-system, sans-serif';
-  function blurDraw(ctx, src, W, H, factor = 14) {
-    // desfoque compatível com todos os navegadores: reduz e amplia
-    const sw = Math.max(8, Math.round(W / factor)), sh = Math.max(8, Math.round(H / factor));
+  // Desfoque suave de verdade (box blur em 3 passadas ≈ gaussiano), funciona igual em todos os navegadores
+  function boxBlur(img, w, h, r) {
+    if (r < 1) return;
+    const d = img.data, tmp = new Uint8ClampedArray(d.length);
+    const pass = (src, dst, horiz) => {
+      const len = horiz ? w : h, lines = horiz ? h : w;
+      for (let l = 0; l < lines; l++) {
+        let rs = 0, gs = 0, bs = 0;
+        const idx = (i) => ((horiz ? l * w + Math.min(len - 1, Math.max(0, i)) : Math.min(len - 1, Math.max(0, i)) * w + l) * 4);
+        for (let i = -r; i <= r; i++) { const k = idx(i); rs += src[k]; gs += src[k + 1]; bs += src[k + 2]; }
+        const n = 2 * r + 1;
+        for (let i = 0; i < len; i++) {
+          const o = horiz ? (l * w + i) * 4 : (i * w + l) * 4;
+          dst[o] = rs / n; dst[o + 1] = gs / n; dst[o + 2] = bs / n; dst[o + 3] = 255;
+          const a = idx(i - r), b = idx(i + r + 1);
+          rs += src[b] - src[a]; gs += src[b + 1] - src[a + 1]; bs += src[b + 2] - src[a + 2];
+        }
+      }
+    };
+    for (let k = 0; k < 3; k++) { pass(d, tmp, true); pass(tmp, d, false); }
+  }
+  function blurDraw(ctx, src, W, H, amount = 40) {
+    const cover = (c, w, h) => { const r = Math.max(w / src.width, h / src.height); c.drawImage(src, (w - src.width * r) / 2, (h - src.height * r) / 2, src.width * r, src.height * r); };
+    if (amount <= 0) { cover(ctx, W, H); return; }
+    // trabalha em 1/3 do tamanho (rápido) e amplia suavemente
+    const sw = Math.round(W / 3), sh = Math.round(H / 3);
     const t = document.createElement('canvas'); t.width = sw; t.height = sh;
     const tc = t.getContext('2d');
-    if (src) { const r = Math.max(sw / src.width, sh / src.height); tc.drawImage(src, (sw - src.width * r) / 2, (sh - src.height * r) / 2, src.width * r, src.height * r); }
+    tc.imageSmoothingEnabled = true; tc.imageSmoothingQuality = 'high';
+    cover(tc, sw, sh);
+    const img = tc.getImageData(0, 0, sw, sh);
+    boxBlur(img, sw, sh, Math.max(1, Math.round(amount * 0.16)));
+    tc.putImageData(img, 0, 0);
     ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(t, 0, 0, W, H);
   }
@@ -519,8 +546,12 @@ const Creative = (() => {
     const W = 1080, H = story ? 1920 : 1350;
     canvas.width = W; canvas.height = H;
     const ctx = canvas.getContext('2d');
-    blurDraw(ctx, opts.photo || bookScene(W, H, mulberry32(opts.seed || 5)), W, H, opts.photo ? 22 : 9);
-    ctx.fillStyle = 'rgba(255,255,255,.08)'; ctx.fillRect(0, 0, W, H);
+    blurDraw(ctx, opts.photo || bookScene(W, H, mulberry32(opts.seed || 5)), W, H, opts.blur ?? 40);
+    // película sobre a foto (escura ou clara)
+    const tAmt = Math.max(0, Math.min(0.9, (opts.tintAmount ?? 10) / 100));
+    ctx.fillStyle = opts.tint === 'light' ? `rgba(255,255,255,${tAmt})` : `rgba(0,0,0,${tAmt})`;
+    ctx.fillRect(0, 0, W, H);
+    const cardA = Math.max(0.15, Math.min(1, (opts.cardOpacity ?? 93) / 100));
 
     const k = opts.textScale || 1;
     const cw = 880, cx = (W - cw) / 2, pad = 64;
@@ -539,13 +570,18 @@ const Creative = (() => {
     // cartão
     ctx.save();
     ctx.shadowColor = 'rgba(0,0,0,.22)'; ctx.shadowBlur = 50; ctx.shadowOffsetY = 18;
-    ctx.fillStyle = 'rgba(252,247,248,.93)';
+    ctx.fillStyle = `rgba(252,247,248,${cardA})`;
     roundRect(ctx, cx, cy, cw, ch, 54); ctx.fill();
     ctx.restore();
+    // contorno sutil para o cartão continuar visível mesmo bem transparente
+    ctx.strokeStyle = `rgba(255,255,255,${0.35 + (1 - cardA) * 0.4})`; ctx.lineWidth = 2;
+    roundRect(ctx, cx, cy, cw, ch, 54); ctx.stroke();
     // aba do mês
     ctx.save(); roundRect(ctx, cx, cy, cw, ch, 54); ctx.clip();
+    ctx.globalAlpha = cardA;
     ctx.fillStyle = mix(C.a, '#f3eef0', 0.86);
     ctx.fillRect(cx, cy, 300, headH);
+    ctx.globalAlpha = 1;
     ctx.restore();
     ctx.fillStyle = ink; ctx.font = `700 46px ${SANS}`;
     ctx.fillText(opts.month || '', cx + 50, cy + 77);

@@ -1111,6 +1111,9 @@ Responda SOMENTE em JSON: {"frase": "mensagem de bom dia curta e marcante para a
   const tint = () => S.settings.photoTint || 'dark';
   const tintAmount = () => (S.settings.photoTintAmount ?? 35);
   const textScale = () => (S.settings.textScale ?? 100);
+  const cardTint = () => (S.settings.cardTint ?? 10);
+  const cardBlur = () => (S.settings.cardBlur ?? 40);
+  const cardOpacity = () => (S.settings.cardOpacity ?? 93);
   const textPos = () => S.settings.textPos ?? (effStyle() === 'photo' ? 32 : 50);
 
   function renderCreate() {
@@ -1160,7 +1163,17 @@ Responda SOMENTE em JSON: {"frase": "mensagem de bom dia curta e marcante para a
             </div>
           </div>
           ${slider('tint', 'Opacidade', 0, 85, tintAmount())}`
-        : cardStyle ? '<p class="small muted" style="margin:0 2px">Cartão: a foto da galeria (ou da IA) aparece desfocada ao fundo. Sem foto, usa uma Bíblia aberta.</p>'
+        : cardStyle ? `
+          <div class="ctl-row">
+            <span class="sl-label">Película</span>
+            <div class="mini-seg">
+              <button class="${tint() === 'dark' ? 'active' : ''}" data-tint="dark">🌑 Escura</button>
+              <button class="${tint() === 'light' ? 'active' : ''}" data-tint="light">☀️ Clara</button>
+            </div>
+          </div>
+          ${slider('cardtint', 'Foto', 0, 85, cardTint())}
+          ${slider('blur', 'Desfoque', 0, 100, cardBlur())}
+          ${slider('cardop', 'Cartão', 20, 100, cardOpacity())}`
         : `<div class="bg-picker mini">${Creative.backgrounds.map((b) => `<button class="bg-thumb ${c.bg === b.id ? 'active' : ''}" data-bg="${b.id}" title="${esc(b.name)}"><canvas data-thumb="${b.id}"></canvas></button>`).join('')}</div>`}
         ${slider('size', 'Tamanho', 60, 150, textScale())}
         ${slider('pos', 'Posição', 10, 85, textPos())}
@@ -1218,7 +1231,7 @@ Responda SOMENTE em JSON: {"frase": "mensagem de bom dia curta e marcante para a
   function paint(cv, format) {
     const o = renderOpts(format);
     const st = effStyle();
-    if (st === 'card') return Creative.renderCard(cv, { ...o, quote: o.cardQuote, brand: o.cardBrand });
+    if (st === 'card') return Creative.renderCard(cv, { ...o, quote: o.cardQuote, brand: o.cardBrand, tintAmount: cardTint(), blur: cardBlur(), cardOpacity: cardOpacity() });
     return st === 'photo' ? Creative.renderPhoto(cv, o) : Creative.render(cv, o);
   }
   function drawPreview() {
@@ -1271,6 +1284,9 @@ Responda SOMENTE em JSON: {"frase": "mensagem de bom dia curta e marcante para a
     if (id === 'tint') S.settings.photoTintAmount = v;
     if (id === 'size') S.settings.textScale = v;
     if (id === 'pos') S.settings.textPos = v;
+    if (id === 'cardtint') S.settings.cardTint = v;
+    if (id === 'blur') S.settings.cardBlur = v;
+    if (id === 'cardop') S.settings.cardOpacity = v;
     const lab = document.querySelector(`[data-slval="${id}"]`);
     if (lab) lab.textContent = `${v}%`;
     drawPreview();
