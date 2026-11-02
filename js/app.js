@@ -1091,6 +1091,8 @@ Responda SOMENTE em JSON: {"frase": "mensagem de bom dia curta e marcante para a
     if (createState.mode === 'bomdia') { Object.assign(getBomDia(createState.day), obj); save(); } else setCreative(obj);
   }
   const style = () => S.settings.postStyle || 'classic';
+  const tint = () => S.settings.photoTint || 'dark';
+  const tintAmount = () => (S.settings.photoTintAmount ?? 35);
 
   function renderCreate() {
     getDailyCreative();
@@ -1123,11 +1125,22 @@ Responda SOMENTE em JSON: {"frase": "mensagem de bom dia curta e marcante para a
       </div>
       ${photoStyle ? `
         <div class="row wrap">
-          <button class="btn sm primary" data-act="gen-photo" ${createState.photoBusy ? 'disabled' : ''}>${createState.photoBusy ? 'Gerando foto… (até 1 min)' : '✨ Gerar foto com IA'}</button>
-          <label class="btn sm ghost" style="cursor:pointer">🖼️ Usar minha foto<input type="file" accept="image/*" id="photo-file" hidden></label>
+          <label class="btn primary" style="cursor:pointer;flex:1">🖼️ Foto da galeria<input type="file" accept="image/*" id="photo-file" hidden></label>
+          <button class="btn" style="flex:1" data-act="gen-photo" ${createState.photoBusy ? 'disabled' : ''}>${createState.photoBusy ? 'Gerando… (até 1 min)' : '✨ Foto com IA'}</button>
         </div>
-        <p class="small muted" style="margin:8px 2px 0">A IA cria uma foto cinematográfica combinando com a mensagem. Você também pode usar uma foto da sua loja.</p>`
-      : `<div class="bg-picker">${Creative.backgrounds.map((b) => `<button class="bg-thumb ${c.bg === b.id ? 'active' : ''}" data-bg="${b.id}" title="${esc(b.name)}"><canvas data-thumb="${b.id}"></canvas></button>`).join('')}</div>`}
+        <div class="field" style="margin:16px 0 0"><label>Película sobre a foto</label>
+          <div class="seg">
+            <button class="${tint() === 'dark' ? 'active' : ''}" data-tint="dark">🌑 Escura · texto branco</button>
+            <button class="${tint() === 'light' ? 'active' : ''}" data-tint="light">☀️ Clara · texto escuro</button>
+          </div>
+        </div>
+        <div class="field" style="margin:14px 0 0">
+          <label>Intensidade da película: <span id="tint-val">${tintAmount()}%</span></label>
+          <input type="range" id="tint-range" min="0" max="85" step="1" value="${tintAmount()}" style="padding:0;accent-color:var(--gold)">
+        </div>
+        <p class="small muted" style="margin:8px 2px 0">Escolha uma foto sua (loja, cliente, paisagem) ou deixe a IA criar uma. A película deixa a foto translúcida e o texto aparece na frente.</p>`
+      : `<div class="bg-picker">${Creative.backgrounds.map((b) => `<button class="bg-thumb ${c.bg === b.id ? 'active' : ''}" data-bg="${b.id}" title="${esc(b.name)}"><canvas data-thumb="${b.id}"></canvas></button>`).join('')}</div>
+        <label class="btn sm ghost" style="cursor:pointer;margin-top:6px">🖼️ Usar foto da galeria<input type="file" accept="image/*" id="photo-file" hidden></label>`}
 
       <div class="row wrap" style="margin-top:16px">
         <button class="btn ig" data-act="story" style="flex:1">📲 Postar no Stories</button>
@@ -1170,7 +1183,7 @@ Responda SOMENTE em JSON: {"frase": "mensagem de bom dia curta e marcante para a
       format, bg: c.bg, seed: bomdia ? weekNum() + createState.day : dayNum(), quote: c.quote, ref: c.ref, tag: c.tag,
       date: bomdia ? '' : shortDate(), handle: S.settings.handle,
       brand: bomdia && storeName() ? storeName() : 'Bíblia do Empreendedor',
-      photo: photos[createState.mode],
+      photo: photos[createState.mode], tint: tint(), tintAmount: tintAmount(),
     };
   }
   function paint(cv, format) {
@@ -1220,9 +1233,16 @@ Responda SOMENTE em JSON: {"frase": "mensagem de bom dia curta e marcante para a
   }
   const fileName = (format) => `${createState.mode === 'bomdia' ? 'bom-dia' : 'palavra'}-${format === 'post' ? 'post' : 'stories'}-${dateKey()}.png`;
 
+  $('#view-create').addEventListener('input', (e) => {
+    if (e.target.id !== 'tint-range') return;
+    S.settings.photoTintAmount = +e.target.value;
+    $('#tint-val').textContent = `${e.target.value}%`;
+    drawPreview();
+  });
+  $('#view-create').addEventListener('change', (e) => { if (e.target.id === 'tint-range') save(); });
   $('#view-create').addEventListener('change', async (e) => {
     if (e.target.id !== 'photo-file' || !e.target.files[0]) return;
-    try { await storePhoto(createState.mode, await blobToDataURL(e.target.files[0])); toast('Foto aplicada'); }
+    try { await storePhoto(createState.mode, await blobToDataURL(e.target.files[0])); S.settings.postStyle = 'photo'; save(); toast('Foto aplicada'); }
     catch { toast('Não consegui abrir essa imagem'); }
     renderCreate();
   });
@@ -1232,6 +1252,13 @@ Responda SOMENTE em JSON: {"frase": "mensagem de bom dia curta e marcante para a
     if (m) { createState.mode = m.dataset.mode; renderCreate(); return; }
     const d = e.target.closest('[data-day]');
     if (d) { createState.day = +d.dataset.day; renderCreate(); return; }
+    const tb = e.target.closest('[data-tint]');
+    if (tb) {
+      S.settings.photoTint = tb.dataset.tint;
+      // ponto de partida agradável para cada tipo de película
+      if (S.settings.photoTintAmount == null || (tb.dataset.tint === 'light' && tintAmount() < 30)) S.settings.photoTintAmount = tb.dataset.tint === 'light' ? 45 : 35;
+      save(); renderCreate(); return;
+    }
     const st = e.target.closest('[data-style]');
     if (st) { S.settings.postStyle = st.dataset.style; save(); renderCreate(); return; }
     const f = e.target.closest('[data-fmt]');

@@ -406,12 +406,18 @@ const Creative = (() => {
       g.addColorStop(0, '#1b1712'); g.addColorStop(1, '#050505');
       ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
     }
-    // escurece para leitura (mais forte no topo, onde fica o texto) + vinheta
-    ctx.fillStyle = 'rgba(0,0,0,.22)'; ctx.fillRect(0, 0, W, H);
+    // película translúcida (escura ou clara) para o texto ficar legível
+    const light = opts.tint === 'light';
+    const amt = Math.max(0, Math.min(0.9, (opts.tintAmount ?? 35) / 100));
+    const base = light ? '255,255,255' : '0,0,0';
+    ctx.fillStyle = `rgba(${base},${amt})`; ctx.fillRect(0, 0, W, H);
+    // reforço suave na área do texto (topo)
     let g = ctx.createLinearGradient(0, 0, 0, H * 0.65);
-    g.addColorStop(0, 'rgba(0,0,0,.6)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+    g.addColorStop(0, `rgba(${base},${Math.min(0.55, amt * 0.9 + 0.1)})`); g.addColorStop(1, `rgba(${base},0)`);
     ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-    vignette(ctx, W, H, 0.55);
+    if (!light) vignette(ctx, W, H, 0.5);
+    const ink = light ? '#141414' : '#ffffff';
+    const accent = light ? C.ink : C.l;
 
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     const cx = W / 2;
@@ -427,26 +433,26 @@ const Creative = (() => {
     }
     const centerY = H * (story ? 0.3 : 0.32);
     let y = centerY - ((lines.length - 1) * lh) / 2;
-    ctx.fillStyle = '#ffffff';
-    ctx.shadowColor = 'rgba(0,0,0,.75)'; ctx.shadowBlur = 16;
+    ctx.fillStyle = ink;
+    ctx.shadowColor = light ? 'rgba(255,255,255,.7)' : 'rgba(0,0,0,.75)'; ctx.shadowBlur = light ? 10 : 16;
     if (opts.tag) {
       ctx.font = `400 ${Math.round(size * 0.55)}px ${HAND}`;
-      ctx.fillStyle = C.l;
+      ctx.fillStyle = accent;
       spaced(ctx, opts.tag.toUpperCase(), cx, y - lh * 1.05, size * 0.12);
-      ctx.fillStyle = '#ffffff';
+      ctx.fillStyle = ink;
     }
     ctx.font = `400 ${size}px ${HAND}`;
     for (const l of lines) { spaced(ctx, l, cx, y, sp); y += lh; }
     if (opts.ref) {
       ctx.font = `400 ${Math.round(size * 0.6)}px ${HAND}`;
-      ctx.fillStyle = C.l;
+      ctx.fillStyle = accent;
       spaced(ctx, opts.ref.toUpperCase(), cx, y + lh * 0.1, size * 0.1);
     }
     ctx.shadowBlur = 6;
     // assinatura discreta
     const sig = (opts.handle || opts.brand || '').toUpperCase();
     if (sig) {
-      ctx.font = `400 24px ${HAND}`; ctx.fillStyle = 'rgba(255,255,255,.62)';
+      ctx.font = `400 24px ${HAND}`; ctx.fillStyle = light ? 'rgba(0,0,0,.6)' : 'rgba(255,255,255,.62)';
       ctx.textAlign = 'left';
       ctx.fillText(sig, W * 0.08, H - (story ? 300 : 120));
     }
