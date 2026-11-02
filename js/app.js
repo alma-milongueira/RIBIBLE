@@ -1108,7 +1108,7 @@ Responda SOMENTE em JSON: {"frase": "mensagem de bom dia curta e marcante para a
     if (c.ref) return pick(CARD_TITLES, dayNum())(MONTHS[new Date().getMonth()], c.ref);
     return c.tag || 'Reflexão do dia';
   }
-  const tint = () => S.settings.photoTint || 'dark';
+  const tint = () => 'dark'; // película sempre escura
   const tintAmount = () => (S.settings.photoTintAmount ?? 35);
   const textScale = () => (S.settings.textScale ?? 100);
   const textFont = () => S.settings.textFont || (effStyle() === 'photo' ? 'hand' : 'serif');
@@ -1157,23 +1157,9 @@ Responda SOMENTE em JSON: {"frase": "mensagem de bom dia curta e marcante para a
           <button class="mbtn" data-act="gen-photo" ${createState.photoBusy ? 'disabled' : ''}>${createState.photoBusy ? '⏳ Gerando…' : '✨ Foto IA'}</button>
         </div>
         ${photoStyle ? `
-          <div class="ctl-row">
-            <span class="sl-label">Película</span>
-            <div class="mini-seg">
-              <button class="${tint() === 'dark' ? 'active' : ''}" data-tint="dark">🌑 Escura</button>
-              <button class="${tint() === 'light' ? 'active' : ''}" data-tint="light">☀️ Clara</button>
-            </div>
-          </div>
-          ${slider('tint', 'Opacidade', 0, 85, tintAmount())}`
+          ${slider('tint', 'Película', 0, 85, tintAmount())}`
         : cardStyle ? `
-          <div class="ctl-row">
-            <span class="sl-label">Película</span>
-            <div class="mini-seg">
-              <button class="${tint() === 'dark' ? 'active' : ''}" data-tint="dark">🌑 Escura</button>
-              <button class="${tint() === 'light' ? 'active' : ''}" data-tint="light">☀️ Clara</button>
-            </div>
-          </div>
-          ${slider('cardtint', 'Foto', 0, 85, cardTint())}
+          ${slider('cardtint', 'Película', 0, 85, cardTint())}
           ${slider('blur', 'Desfoque', 0, 100, cardBlur())}
           ${slider('cardop', 'Cartão', 20, 100, cardOpacity())}`
         : `<div class="bg-picker mini">${Creative.backgrounds.map((b) => `<button class="bg-thumb ${c.bg === b.id ? 'active' : ''}" data-bg="${b.id}" title="${esc(b.name)}"><canvas data-thumb="${b.id}"></canvas></button>`).join('')}</div>`}
@@ -1263,8 +1249,7 @@ Responda SOMENTE em JSON: {"frase": "mensagem de bom dia curta e marcante para a
     const st = S.settings;
     st.postStyle = ART_STYLES[a.estilo] || 'card';
     if (Creative.FONTS[a.letra]) st.textFont = a.letra; else delete st.textFont;
-    const tint = a.pelicula === 'clara' ? 'light' : 'dark';
-    st.photoTint = tint;
+    st.photoTint = 'dark';
     const amt = Math.max(0, Math.min(80, Math.round(+a.intensidade || 35)));
     if (st.postStyle === 'card') st.cardTint = Math.min(amt, 50); else st.photoTintAmount = amt;
     st.textScale = Math.max(70, Math.min(140, Math.round(+a.tamanho || 100)));
@@ -1283,7 +1268,7 @@ Responda SOMENTE em JSON: {"frase": "mensagem de bom dia curta e marcante para a
     const p = r(PROVERBS);
     return {
       estilo: r(['cartao', 'foto', 'fundos']), letra: r(Object.keys(Creative.FONTS)), fundo: r(Creative.backgrounds).id,
-      pelicula: r(['escura', 'clara']), intensidade: 30 + Math.floor(Math.random() * 30), tamanho: 100, posicao: 0,
+      intensidade: 30 + Math.floor(Math.random() * 30), tamanho: 100, posicao: 0,
       frase: bomdia ? r(BOMDIA_LOCAL[createState.day]) : p.texto, referencia: bomdia ? '' : p.ref, tag: 'Palavra do Dia', titulo: '',
       cena: r(PHOTO_SCENES[bomdia ? 'bomdia' : 'palavra']), legenda: bomdia ? bomdiaCaption(createState.day, r(BOMDIA_LOCAL[createState.day])) : buildCaption(p.texto, p.ref),
     };
@@ -1300,15 +1285,15 @@ Escolha a combinação que combina melhor com a mensagem:
 - estilo: "cartao" (foto desfocada + cartão claro com título e frase com marca-texto, delicado), "foto" (foto cinematográfica + frase grande por cima, emocionante) ou "fundos" (fundo gráfico elegante preto e dourado, sóbrio).
 - fundo (só para "fundos"): um destes ids: ${bgs}.
 - letra (para "foto" e "fundos"): um destes ids: ${fonts}.
-- pelicula: "escura" ou "clara"; intensidade: 0 a 80.
+- intensidade da película escura sobre a foto: 0 a 80.
 - tamanho do texto: 80 a 130 (100 = normal); posicao vertical do texto: 15 a 80 (% da altura).
 - cena: descrição EM INGLÊS de uma foto cinematográfica para o fundo, ligada à mensagem, sem texto.
-Responda SOMENTE em JSON: {"estilo": "", "fundo": "", "letra": "", "pelicula": "", "intensidade": 0, "tamanho": 100, "posicao": 50, "frase": "no máximo 130 caracteres", "referencia": "Livro cap:vers ou vazio", "tag": "2 a 3 palavras", "titulo": "título curto para o estilo cartão", "cena": "", "legenda": "legenda de Instagram com 3 a 5 frases, chamada para ação e 8 hashtags"}`;
+Responda SOMENTE em JSON: {"estilo": "", "fundo": "", "letra": "", "intensidade": 0, "tamanho": 100, "posicao": 50, "frase": "no máximo 130 caracteres", "referencia": "Livro cap:vers ou vazio", "tag": "2 a 3 palavras", "titulo": "título curto para o estilo cartão", "cena": "", "legenda": "legenda de Instagram com 3 a 5 frases, chamada para ação e 8 hashtags"}`;
     const str = { type: 'string' }, num = { type: 'number' };
     const txt = await gemini([{ role: 'user', parts: [{ text: prompt }] }], {
       system: 'Você é um diretor de arte cristão, criativo e com bom gosto. Nunca invente versículos.', json: true, temperature: 1,
-      schema: { type: 'object', additionalProperties: false, required: ['estilo', 'fundo', 'letra', 'pelicula', 'intensidade', 'tamanho', 'posicao', 'frase', 'referencia', 'tag', 'titulo', 'cena', 'legenda'],
-        properties: { estilo: { type: 'string', enum: ['cartao', 'foto', 'fundos'] }, fundo: str, letra: str, pelicula: { type: 'string', enum: ['escura', 'clara'] }, intensidade: num, tamanho: num, posicao: num, frase: str, referencia: str, tag: str, titulo: str, cena: str, legenda: str } },
+      schema: { type: 'object', additionalProperties: false, required: ['estilo', 'fundo', 'letra', 'intensidade', 'tamanho', 'posicao', 'frase', 'referencia', 'tag', 'titulo', 'cena', 'legenda'],
+        properties: { estilo: { type: 'string', enum: ['cartao', 'foto', 'fundos'] }, fundo: str, letra: str, intensidade: num, tamanho: num, posicao: num, frase: str, referencia: str, tag: str, titulo: str, cena: str, legenda: str } },
     });
     return JSON.parse(txt.replace(/^```(json)?|```$/g, '').trim());
   }
