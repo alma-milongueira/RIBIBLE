@@ -21,6 +21,10 @@ App de Bíblia cristã (PWA) com visual **preto e dourado**, texto bíblico em *
 
 A chave fica salva apenas no seu aparelho.
 
+### Opção paga: Claude Haiku 5.5
+
+Em **Ajustes → Provedor da IA**, escolha **Claude Haiku 5.5** e cole uma chave criada em https://console.anthropic.com/settings/keys (é preciso adicionar créditos, a partir de US$ 5). O app usa o SDK oficial da Anthropic (`js/vendor/anthropic-sdk.mjs`, versão 1.3.0, licença em `js/vendor/ANTHROPIC-SDK-LICENSE`).
+
 ## Rodar / publicar
 
 É um site estático, sem build:

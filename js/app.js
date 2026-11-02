@@ -1,6 +1,7 @@
 /* Bíblia do Empreendedor — app */
 (() => {
   'use strict';
+  const SCRIPT_URL = document.currentScript?.src || location.href;
 
   // ================= Estado =================
   const KEY = 'bde:v1';
@@ -10,7 +11,7 @@
     almeida: { short: 'ALM', name: 'João Ferreira de Almeida' },
   };
   const defaults = {
-    settings: { apiKey: '', model: 'gemini-2.5-flash', translation: 'kjv', goal: 3, handle: '', aiPosts: true, fontSize: 21, theme: 'dark', accent: '#d4af37' },
+    settings: { apiKey: '', claudeKey: '', provider: 'gemini', model: 'gemini-2.5-flash', translation: 'kjv', goal: 3, handle: '', aiPosts: true, fontSize: 21, theme: 'dark', accent: '#d4af37' },
     read: {},          // { GEN: [1,2,3] }
     readLog: {},       // { '2026-11-02': 3 }
     last: { book: 'GEN', ch: 1 },
@@ -649,7 +650,52 @@ Regras:
     return { thinkingLevel: 'low' };
   }
 
-  async function gemini(contents, { system = SYSTEM_MENTOR, json = false, temperature = 0.8, onChunk = null, maxTokens = 1200 } = {}) {
+  // ---------- Claude Haiku 5.5 (Anthropic, SDK oficial) ----------
+  let anthropicMod = null;
+  async function claudeChat(contents, { system = SYSTEM_MENTOR, onChunk = null, schema = null, maxTokens = 4096 } = {}) {
+    const key = (S.settings.claudeKey || '').trim();
+    if (!key) throw new Error('NO_KEY');
+    if (!anthropicMod) anthropicMod = await import(new URL('vendor/anthropic-sdk.mjs', SCRIPT_URL).href);
+    const Anthropic = anthropicMod.default;
+    // chave fica só no aparelho do usuário (app pessoal, sem servidor)
+    const client = new Anthropic({ apiKey: key, dangerouslyAllowBrowser: true });
+    const params = {
+      model: 'claude-haiku-5-5',
+      max_tokens: maxTokens,
+      system,
+      // respostas rápidas: sem raciocínio estendido e esforço baixo
+      thinking: { type: 'disabled' },
+      output_config: { effort: 'low', ...(schema ? { format: { type: 'json_schema', schema } } : {}) },
+      messages: contents.map((c) => ({ role: c.role === 'model' ? 'assistant' : 'user', content: c.parts.map((p) => p.text).join('\n') })),
+    };
+    try {
+      let msg;
+      if (onChunk) {
+        const stream = client.messages.stream(params);
+        let text = '';
+        for await (const event of stream) {
+          if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') { text += event.delta.text; onChunk(text); }
+        }
+        msg = await stream.finalMessage();
+      } else {
+        msg = await client.messages.create(params);
+      }
+      if (msg.stop_reason === 'refusal') throw new Error('A IA não pôde responder a esse pedido. Tente reformular.');
+      const text = msg.content.filter((b) => b.type === 'text').map((b) => b.text).join('').trim();
+      if (!text) throw new Error('A IA não retornou resposta. Tente reformular.');
+      return text;
+    } catch (e) {
+      if (e instanceof Anthropic.AuthenticationError) throw new Error('Chave do Claude inválida. Confira em Ajustes.');
+      if (e instanceof Anthropic.RateLimitError) throw new Error('Muitas perguntas seguidas. Aguarde alguns segundos.');
+      if (e instanceof Anthropic.BadRequestError && /credit/i.test(e.message)) throw new Error('Sua conta Anthropic está sem créditos (console.anthropic.com → Billing).');
+      if (e instanceof Anthropic.APIConnectionError) throw new Error('Sem conexão com a Anthropic. Verifique a internet.');
+      if (e instanceof Anthropic.APIError) throw new Error(e.message || 'Erro na API do Claude.');
+      throw e;
+    }
+  }
+
+  async function gemini(contents, { system = SYSTEM_MENTOR, json = false, temperature = 0.8, onChunk = null, maxTokens = 1200, schema = null } = {}) {
+    if (S.settings.provider === 'claude') return claudeChat(contents, { system, onChunk, schema });
     const key = S.settings.apiKey.trim();
     if (!key) throw new Error('NO_KEY');
     const call = async (model, useThinking = true) => {
@@ -708,10 +754,12 @@ Regras:
     }
   }
 
+  const hasAI = () => (S.settings.provider === 'claude' ? !!S.settings.claudeKey : !!S.settings.apiKey);
+
   let mentorBusy = false;
   function askMentor(text) {
     go('mentor');
-    if (!S.settings.apiKey) { $('#mentor-input') && ($('#mentor-input').value = text); return; }
+    if (!hasAI()) { $('#mentor-input') && ($('#mentor-input').value = text); return; }
     sendMentor(text);
   }
 
@@ -747,7 +795,7 @@ Regras:
 
   function renderMentor() {
     const el = $('#view-mentor');
-    const hasKey = !!S.settings.apiKey;
+    const hasKey = hasAI();
     const chips = [pick(DAILY_QUESTIONS, dayNum()), 'Um devocional curto para começar o dia', 'Como lidar com a ansiedade nos negócios?', 'Me dê um versículo para uma reunião difícil', 'Como orar pelo meu negócio?'];
     el.innerHTML = `
       ${pageHead('mentor', 'Mentor IA', 'Pergunte como agir ou tire dúvidas sobre a Bíblia.')}
@@ -759,7 +807,7 @@ Regras:
           <li>Clique em <b>Create API key</b> (é gratuito).</li>
           <li>Cole a chave abaixo.</li>
         </ol>
-        <input id="quick-key" type="password" placeholder="Cole aqui sua chave do Gemini (AIza...)" autocomplete="off">
+        <input id="quick-key" type="password" placeholder="Chave do Gemini (AIza...) ou do Claude (sk-ant...)" autocomplete="off">
         <button class="btn primary block" style="margin-top:10px" data-act="save-key">Ativar Mentor</button>
         <p class="small muted" style="margin:10px 0 0">A chave fica salva só neste aparelho.</p>
       </div>` : ''}
@@ -787,7 +835,7 @@ Regras:
     const submit = () => {
       const v = input.value.trim();
       if (!v) return;
-      if (!S.settings.apiKey) { toast('Ative o Mentor com sua chave gratuita'); return; }
+      if (!hasAI()) { toast('Ative o Mentor com sua chave gratuita'); return; }
       input.value = ''; autosize(); sendMentor(v);
     };
     $('#mentor-send').onclick = submit;
@@ -796,14 +844,16 @@ Regras:
     const wm = e.target.closest('[data-wa-msg]');
     if (wm) { waText(`${S.chat[+wm.dataset.waMsg].text}\n\n_Mentor · Bíblia do Empreendedor_`); return; }
     const c = e.target.closest('[data-q]');
-    if (c) { if (S.settings.apiKey) sendMentor(c.dataset.q); else { $('#mentor-input').value = c.dataset.q; toast('Ative o Mentor com sua chave gratuita'); } return; }
+    if (c) { if (hasAI()) sendMentor(c.dataset.q); else { $('#mentor-input').value = c.dataset.q; toast('Ative o Mentor com sua chave gratuita'); } return; }
     const a = e.target.closest('[data-act]');
     if (!a) return;
     if (a.dataset.act === 'clear') { S.chat = []; save(); renderMentor(); }
     if (a.dataset.act === 'save-key') {
       const k = $('#quick-key').value.trim();
       if (!k) { toast('Cole sua chave'); return; }
-      S.settings.apiKey = k; save(); toast('Mentor ativado ✨');
+      if (k.startsWith('sk-ant')) { S.settings.claudeKey = k; S.settings.provider = 'claude'; }
+      else { S.settings.apiKey = k; S.settings.provider = 'gemini'; }
+      save(); toast('Mentor ativado ✨');
       const draft = $('#mentor-input')?.value.trim();
       renderMentor();
       if (draft) { $('#mentor-input').value = ''; sendMentor(draft); }
@@ -860,6 +910,10 @@ Escolha UM formato:
 Responda SOMENTE em JSON: {"texto": "no máximo 170 caracteres", "referencia": "Livro cap:vers ou vazio", "tag": "2 a 3 palavras para o topo, ex: Palavra do Dia", "legenda": "legenda para Instagram com 3 a 5 frases curtas sobre o tema, uma chamada para ação e 8 hashtags, incluindo #bibliadoempreendedor"}`;
     const txt = await gemini([{ role: 'user', parts: [{ text: prompt }] }], {
       system: 'Você cria conteúdo cristão inspirador e fiel à Bíblia para empreendedores. Nunca invente versículos.', json: true, temperature: 1,
+      schema: {
+        type: 'object', additionalProperties: false, required: ['texto', 'referencia', 'tag', 'legenda'],
+        properties: { texto: { type: 'string' }, referencia: { type: 'string' }, tag: { type: 'string' }, legenda: { type: 'string' } },
+      },
     });
     const j = JSON.parse(txt.replace(/^```(json)?|```$/g, '').trim());
     if (!j.texto) throw new Error('Resposta inválida');
@@ -903,14 +957,14 @@ Responda SOMENTE em JSON: {"texto": "no máximo 170 caracteres", "referencia": "
       <div class="section-title">Legenda</div>
       <div class="caption-box">${esc(c.caption)}</div>
       <button class="btn sm" style="margin-top:10px" data-act="copy-caption">Copiar legenda</button>
-      ${!S.settings.apiKey ? '<p class="notice" style="margin-top:16px">Dica: adicione sua chave gratuita do Gemini em Ajustes para que a IA crie um texto novo e exclusivo todos os dias.</p>' : ''}
+      ${!hasAI() ? '<p class="notice" style="margin-top:16px">Dica: adicione sua chave gratuita do Gemini em Ajustes para que a IA crie um texto novo e exclusivo todos os dias.</p>' : ''}
     `;
     Creative.ensureFonts().then(() => {
       drawPreview();
       el.querySelectorAll('[data-thumb]').forEach((cv) => Creative.thumb(cv, cv.dataset.thumb));
     });
     // IA cria automaticamente uma vez por dia
-    if (S.settings.apiKey && S.settings.aiPosts && !c.aiTried && c.source === 'local') {
+    if (hasAI() && S.settings.aiPosts && !c.aiTried && c.source === 'local') {
       c.aiTried = true; save();
       runAI(true);
     }
@@ -1084,6 +1138,18 @@ Responda SOMENTE em JSON: {"texto": "no máximo 170 caracteres", "referencia": "
 
       <div class="section-title">Inteligência artificial</div>
       <div class="card">
+        <div class="field"><label>Provedor da IA</label>
+          <div class="seg" id="st-provider">
+            <button type="button" class="${s.provider !== 'claude' ? 'active' : ''}" data-provider="gemini">Google Gemini · grátis</button>
+            <button type="button" class="${s.provider === 'claude' ? 'active' : ''}" data-provider="claude">Claude Haiku 5.5 · pago</button>
+          </div>
+        </div>
+        <div class="field" ${s.provider === 'claude' ? '' : 'hidden'}>
+          <label>Chave da API da Anthropic (Claude)</label>
+          <input id="st-ckey" type="password" value="${esc(s.claudeKey || '')}" placeholder="sk-ant-..." autocomplete="off">
+          <p class="small muted" style="margin:6px 0 0">Crie em <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a> e adicione créditos (a partir de US$ 5). Custo do Haiku 5.5: cerca de US$ 0,0005 por resposta.</p>
+        </div>
+        <div ${s.provider === 'claude' ? 'hidden' : ''}>
         <div class="field">
           <label>Chave da API do Google Gemini (gratuita)</label>
           <input id="st-key" type="password" value="${esc(s.apiKey)}" placeholder="AIza..." autocomplete="off">
@@ -1093,6 +1159,7 @@ Responda SOMENTE em JSON: {"texto": "no máximo 170 caracteres", "referencia": "
           <label>Modelo</label>
           <select id="st-model">${MODELS.map((m) => `<option value="${m.id}" ${s.model === m.id ? 'selected' : ''}>${esc(m.name)}</option>`).join('')}
             ${MODELS.some((m) => m.id === s.model) ? '' : `<option value="${esc(s.model)}" selected>${esc(s.model)}</option>`}</select>
+        </div>
         </div>
         <label class="switch">Criar o post do dia com IA automaticamente<input type="checkbox" id="st-aiposts" ${s.aiPosts ? 'checked' : ''}></label>
         <button class="btn sm" data-act="test">Testar conexão</button>
@@ -1135,6 +1202,12 @@ Responda SOMENTE em JSON: {"texto": "no máximo 170 caracteres", "referencia": "
     document.querySelectorAll('.swatch').forEach((x) => x.classList.toggle('active', x.classList.contains('swatch-custom')));
   });
   $('#view-settings').addEventListener('click', async (e) => {
+    const pv = e.target.closest('[data-provider]');
+    if (pv) {
+      const st = S.settings;
+      st.apiKey = $('#st-key').value.trim(); st.claudeKey = $('#st-ckey').value.trim();
+      st.provider = pv.dataset.provider; save(); renderSettings(); return;
+    }
     const th = e.target.closest('[data-theme-opt]');
     if (th) { S.settings.theme = th.dataset.themeOpt; save(); applyTheme(); renderSettings(); return; }
     const ac = e.target.closest('[data-accent]');
@@ -1144,6 +1217,7 @@ Responda SOMENTE em JSON: {"texto": "no máximo 170 caracteres", "referencia": "
     const s = S.settings;
     const collect = () => {
       s.apiKey = $('#st-key').value.trim();
+      s.claudeKey = $('#st-ckey').value.trim();
       if (s.model !== $('#st-model').value) s.modelChosen = true;
       s.model = $('#st-model').value || DEFAULT_MODEL;
       s.aiPosts = $('#st-aiposts').checked;
