@@ -343,11 +343,18 @@ const Creative = (() => {
     ornament(ctx, cx, top + (opts.date ? 105 : 62), 300);
 
     // Citação
-    const boxTop = top + (story ? 190 : 150);
-    const boxBottom = H - (story ? 520 : 300);
+    const k = opts.textScale || 1;
+    let boxTop = top + (story ? 190 : 150);
+    let boxBottom = H - (story ? 520 : 300);
+    if (opts.textPos != null) {
+      // posição livre: centraliza o bloco do texto na altura escolhida
+      const half = (boxBottom - boxTop) / 2;
+      const c = H * opts.textPos;
+      boxTop = c - half; boxBottom = c + half;
+    }
     const quote = opts.ref ? `“${opts.quote}”` : opts.quote;
     const fit = fitText(ctx, quote, W - (story ? 180 : 200), boxBottom - boxTop, {
-      max: story ? 92 : 80, min: 36,
+      max: Math.round((story ? 92 : 80) * k), min: Math.round(36 * k),
       font: (s) => `${opts.ref ? '600' : 'italic 600'} ${s}px "Cormorant Garamond"`,
     });
     ctx.font = `${opts.ref ? '600' : 'italic 600'} ${fit.size}px "Cormorant Garamond"`;
@@ -423,15 +430,17 @@ const Creative = (() => {
     const cx = W / 2;
     const text = (opts.quote || '').toUpperCase();
     const maxW = W * 0.74;
-    let size = story ? 70 : 64, lines, lh, sp;
-    for (; size >= 32; size -= 2) {
+    const k = opts.textScale || 1;
+    let size = Math.round((story ? 70 : 64) * k), lines, lh, sp;
+    const minSize = Math.round(32 * k);
+    for (; size >= minSize; size -= 2) {
       ctx.font = `400 ${size}px ${HAND}`;
       sp = size * 0.14;
       lines = wrapSpaced(ctx, text, maxW, sp);
       lh = size * 1.6;
-      if (lines.length * lh <= H * (story ? 0.3 : 0.34)) break;
+      if (lines.length * lh <= H * (story ? 0.3 : 0.34) * k) break;
     }
-    const centerY = H * (story ? 0.3 : 0.32);
+    const centerY = H * (opts.textPos ?? (story ? 0.3 : 0.32));
     let y = centerY - ((lines.length - 1) * lh) / 2;
     ctx.fillStyle = ink;
     ctx.shadowColor = light ? 'rgba(255,255,255,.7)' : 'rgba(0,0,0,.75)'; ctx.shadowBlur = light ? 10 : 16;

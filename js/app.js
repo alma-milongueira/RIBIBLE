@@ -1093,6 +1093,8 @@ Responda SOMENTE em JSON: {"frase": "mensagem de bom dia curta e marcante para a
   const style = () => S.settings.postStyle || 'classic';
   const tint = () => S.settings.photoTint || 'dark';
   const tintAmount = () => (S.settings.photoTintAmount ?? 35);
+  const textScale = () => (S.settings.textScale ?? 100);
+  const textPos = () => S.settings.textPos ?? (style() === 'photo' ? 32 : 50);
 
   function renderCreate() {
     getDailyCreative();
@@ -1101,66 +1103,68 @@ Responda SOMENTE em JSON: {"frase": "mensagem de bom dia curta e marcante para a
     const bomdia = createState.mode === 'bomdia';
     const photoStyle = style() === 'photo';
     const el = $('#view-create');
+    const WA_ICON = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm5.8 14.1c-.2.7-1.4 1.3-2 1.4-.5.1-1.2.1-1.9-.1-.4-.1-1-.3-1.7-.6-3-1.3-4.9-4.3-5.1-4.5-.1-.2-1.2-1.6-1.2-3.1s.8-2.2 1-2.5c.3-.3.6-.4.8-.4h.6c.2 0 .4 0 .6.5l.9 2.1c.1.1.1.3 0 .5l-.3.5-.4.5c-.1.1-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.2 1 2.1 1.4 2.4 1.5.3.1.5.1.6-.1l.9-1.1c.2-.3.4-.2.6-.1l2 .9c.3.1.5.2.5.3.1.1.1.7-.1 1.4z"/></svg>';
+    const slider = (id, label, min, max, val, unit = '%') => `
+      <div class="sl-row"><span class="sl-label">${label}</span>
+        <input type="range" data-slider="${id}" min="${min}" max="${max}" step="1" value="${val}">
+        <span class="sl-val" data-slval="${id}">${val}${unit}</span></div>`;
     el.innerHTML = `
-      ${pageHead('create', 'Estúdio de Posts', 'Post e stories novos todos os dias.')}
-      <div class="seg" style="margin-bottom:10px">
-        <button class="${!bomdia ? 'active' : ''}" data-mode="palavra">📖 Palavra do dia</button>
-        <button class="${bomdia ? 'active' : ''}" data-mode="bomdia">☀️ Bom dia da loja</button>
-      </div>
-      ${bomdia ? `<div class="chips" style="margin-bottom:10px">${WEEKDAY_SHORT.map((d, i) => `<button class="chip ${createState.day === i ? 'active' : ''}" data-day="${i}">${d}${i === new Date().getDay() ? ' · hoje' : ''}</button>`).join('')}</div>
-        ${!storeName() ? '<p class="notice" style="margin:0 0 12px">Coloque o nome da sua loja em <b>Ajustes → Sua empresa</b> para a IA citar a loja nas mensagens.</p>' : ''}` : ''}
-      <div class="seg" style="margin-bottom:14px">
-        <button class="${createState.format === 'post' ? 'active' : ''}" data-fmt="post">Post 4:5</button>
-        <button class="${createState.format === 'story' ? 'active' : ''}" data-fmt="story">Stories 9:16</button>
-      </div>
-      <div class="preview-wrap ${createState.format === 'story' ? 'story' : ''}"><canvas id="cv"></canvas></div>
-      <div class="row" style="justify-content:center;margin-bottom:6px">
-        <span class="chip">${c.source === 'ia' ? '✨ Texto criado por IA' : bomdia ? '☀️ Bom dia' : c.ref ? '📖 Versículo' : '💡 Reflexão'}</span>
-      </div>
-
-      <div class="section-title">Estilo da arte</div>
-      <div class="seg" style="margin-bottom:12px">
-        <button class="${!photoStyle ? 'active' : ''}" data-style="classic">Fundos elegantes</button>
-        <button class="${photoStyle ? 'active' : ''}" data-style="photo">Foto + manuscrito</button>
-      </div>
-      ${photoStyle ? `
-        <div class="row wrap">
-          <label class="btn primary" style="cursor:pointer;flex:1">🖼️ Foto da galeria<input type="file" accept="image/*" id="photo-file" hidden></label>
-          <button class="btn" style="flex:1" data-act="gen-photo" ${createState.photoBusy ? 'disabled' : ''}>${createState.photoBusy ? 'Gerando… (até 1 min)' : '✨ Foto com IA'}</button>
+      <div class="studio-top">
+        <div class="mini-seg">
+          <button class="${!bomdia ? 'active' : ''}" data-mode="palavra">📖 Palavra</button>
+          <button class="${bomdia ? 'active' : ''}" data-mode="bomdia">☀️ Bom dia loja</button>
         </div>
-        <div class="field" style="margin:16px 0 0"><label>Película sobre a foto</label>
-          <div class="seg">
-            <button class="${tint() === 'dark' ? 'active' : ''}" data-tint="dark">🌑 Escura · texto branco</button>
-            <button class="${tint() === 'light' ? 'active' : ''}" data-tint="light">☀️ Clara · texto escuro</button>
+        <div class="mini-seg">
+          <button class="${createState.format === 'post' ? 'active' : ''}" data-fmt="post">4:5</button>
+          <button class="${createState.format === 'story' ? 'active' : ''}" data-fmt="story">9:16</button>
+        </div>
+      </div>
+      ${bomdia ? `<div class="chips mini" style="margin-bottom:8px">${WEEKDAY_SHORT.map((d, i) => `<button class="chip ${createState.day === i ? 'active' : ''}" data-day="${i}">${d}${i === new Date().getDay() ? '•' : ''}</button>`).join('')}</div>` : ''}
+
+      <div class="studio-preview ${createState.format === 'story' ? 'story' : ''}"><canvas id="cv"></canvas></div>
+
+      <div class="studio-panel">
+        <div class="ctl-row">
+          <div class="mini-seg">
+            <button class="${!photoStyle ? 'active' : ''}" data-style="classic">Fundos</button>
+            <button class="${photoStyle ? 'active' : ''}" data-style="photo">Foto</button>
           </div>
+          <label class="mbtn accent" title="Foto da galeria">🖼️ Galeria<input type="file" accept="image/*" id="photo-file" hidden></label>
+          <button class="mbtn" data-act="gen-photo" ${createState.photoBusy ? 'disabled' : ''}>${createState.photoBusy ? '⏳ Gerando…' : '✨ Foto IA'}</button>
         </div>
-        <div class="field" style="margin:14px 0 0">
-          <label>Intensidade da película: <span id="tint-val">${tintAmount()}%</span></label>
-          <input type="range" id="tint-range" min="0" max="85" step="1" value="${tintAmount()}" style="padding:0;accent-color:var(--gold)">
+        ${photoStyle ? `
+          <div class="ctl-row">
+            <span class="sl-label">Película</span>
+            <div class="mini-seg">
+              <button class="${tint() === 'dark' ? 'active' : ''}" data-tint="dark">🌑 Escura</button>
+              <button class="${tint() === 'light' ? 'active' : ''}" data-tint="light">☀️ Clara</button>
+            </div>
+          </div>
+          ${slider('tint', 'Opacidade', 0, 85, tintAmount())}`
+        : `<div class="bg-picker mini">${Creative.backgrounds.map((b) => `<button class="bg-thumb ${c.bg === b.id ? 'active' : ''}" data-bg="${b.id}" title="${esc(b.name)}"><canvas data-thumb="${b.id}"></canvas></button>`).join('')}</div>`}
+        ${slider('size', 'Tamanho', 60, 150, textScale())}
+        ${slider('pos', 'Posição', 10, 85, textPos())}
+
+        <div class="ctl-row" style="margin-top:4px">
+          <button class="mbtn" data-act="ai" ${createState.busy ? 'disabled' : ''}>${createState.busy ? '⏳ Criando…' : '✨ Texto IA'}</button>
+          ${bomdia ? '<button class="mbtn" data-act="bomdia-local">🔄 Outra</button>' : '<button class="mbtn" data-act="proverb">📖 Provérbio</button><button class="mbtn" data-act="frase">💡 Frase</button>'}
+          <button class="mbtn" data-act="edit">✏️ Editar</button>
         </div>
-        <p class="small muted" style="margin:8px 2px 0">Escolha uma foto sua (loja, cliente, paisagem) ou deixe a IA criar uma. A película deixa a foto translúcida e o texto aparece na frente.</p>`
-      : `<div class="bg-picker">${Creative.backgrounds.map((b) => `<button class="bg-thumb ${c.bg === b.id ? 'active' : ''}" data-bg="${b.id}" title="${esc(b.name)}"><canvas data-thumb="${b.id}"></canvas></button>`).join('')}</div>
-        <label class="btn sm ghost" style="cursor:pointer;margin-top:6px">🖼️ Usar foto da galeria<input type="file" accept="image/*" id="photo-file" hidden></label>`}
+        <div class="ctl-row share-row">
+          <button class="mbtn ig" data-act="story">📲 Stories</button>
+          <button class="mbtn wa" data-act="wa">${WA_ICON} WhatsApp</button>
+          <button class="mbtn" data-act="share">↗ Enviar</button>
+          <button class="mbtn" data-act="download">⬇ Baixar</button>
+        </div>
+      </div>
 
-      <div class="row wrap" style="margin-top:16px">
-        <button class="btn ig" data-act="story" style="flex:1">📲 Postar no Stories</button>
-        <button class="btn wa" data-act="wa" style="flex:1"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm5.8 14.1c-.2.7-1.4 1.3-2 1.4-.5.1-1.2.1-1.9-.1-.4-.1-1-.3-1.7-.6-3-1.3-4.9-4.3-5.1-4.5-.1-.2-1.2-1.6-1.2-3.1s.8-2.2 1-2.5c.3-.3.6-.4.8-.4h.6c.2 0 .4 0 .6.5l.9 2.1c.1.1.1.3 0 .5l-.3.5-.4.5c-.1.1-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.2 1 2.1 1.4 2.4 1.5.3.1.5.1.6-.1l.9-1.1c.2-.3.4-.2.6-.1l2 .9c.3.1.5.2.5.3.1.1.1.7-.1 1.4z"/></svg> WhatsApp</button>
-      </div>
-      <div class="row wrap" style="margin-top:10px">
-        <button class="btn" data-act="share" style="flex:1">Compartilhar</button>
-        <button class="btn" data-act="download" style="flex:1">Baixar ${createState.format === 'post' ? 'post' : 'stories'}</button>
-      </div>
-      <button class="btn block ghost" data-act="download-both" style="margin-top:10px">⬇ Baixar post + stories</button>
-
-      <div class="section-title">Texto</div>
-      <div class="row wrap">
-        <button class="btn sm" data-act="ai" ${createState.busy ? 'disabled' : ''}>${createState.busy ? 'Criando…' : bomdia ? `✨ Criar bom dia de ${WEEKDAY_SHORT[createState.day].toLowerCase()} com IA` : '✨ Gerar com IA'}</button>
-        ${bomdia ? '<button class="btn sm" data-act="bomdia-local">🔄 Outra frase</button>' : '<button class="btn sm" data-act="proverb">📖 Provérbio</button><button class="btn sm" data-act="frase">💡 Frase</button>'}
-        <button class="btn sm" data-act="edit">✏️ Editar</button>
-      </div>
+      ${bomdia && !storeName() ? '<p class="notice" style="margin:12px 0 0">Coloque o nome da sua loja em <b>Ajustes → Sua empresa</b> para a IA citar a loja nas mensagens.</p>' : ''}
       <div class="section-title">Legenda</div>
       <div class="caption-box">${esc(c.caption)}</div>
-      <button class="btn sm" style="margin-top:10px" data-act="copy-caption">Copiar legenda</button>
+      <div class="row wrap" style="margin-top:10px">
+        <button class="mbtn" data-act="copy-caption">📋 Copiar legenda</button>
+        <button class="mbtn" data-act="download-both">⬇ Post + stories</button>
+      </div>
       ${!hasAI() ? '<p class="notice" style="margin-top:16px">Dica: adicione sua chave gratuita do Gemini em Ajustes para que a IA crie textos e fotos novos todos os dias.</p>' : ''}
     `;
     Creative.ensureFonts().then(async () => {
@@ -1184,6 +1188,7 @@ Responda SOMENTE em JSON: {"frase": "mensagem de bom dia curta e marcante para a
       date: bomdia ? '' : shortDate(), handle: S.settings.handle,
       brand: bomdia && storeName() ? storeName() : 'Bíblia do Empreendedor',
       photo: photos[createState.mode], tint: tint(), tintAmount: tintAmount(),
+      textScale: textScale() / 100, textPos: textPos() / 100,
     };
   }
   function paint(cv, format) {
@@ -1234,12 +1239,17 @@ Responda SOMENTE em JSON: {"frase": "mensagem de bom dia curta e marcante para a
   const fileName = (format) => `${createState.mode === 'bomdia' ? 'bom-dia' : 'palavra'}-${format === 'post' ? 'post' : 'stories'}-${dateKey()}.png`;
 
   $('#view-create').addEventListener('input', (e) => {
-    if (e.target.id !== 'tint-range') return;
-    S.settings.photoTintAmount = +e.target.value;
-    $('#tint-val').textContent = `${e.target.value}%`;
+    const id = e.target.dataset?.slider;
+    if (!id) return;
+    const v = +e.target.value;
+    if (id === 'tint') S.settings.photoTintAmount = v;
+    if (id === 'size') S.settings.textScale = v;
+    if (id === 'pos') S.settings.textPos = v;
+    const lab = document.querySelector(`[data-slval="${id}"]`);
+    if (lab) lab.textContent = `${v}%`;
     drawPreview();
   });
-  $('#view-create').addEventListener('change', (e) => { if (e.target.id === 'tint-range') save(); });
+  $('#view-create').addEventListener('change', (e) => { if (e.target.dataset?.slider) save(); });
   $('#view-create').addEventListener('change', async (e) => {
     if (e.target.id !== 'photo-file' || !e.target.files[0]) return;
     try { await storePhoto(createState.mode, await blobToDataURL(e.target.files[0])); S.settings.postStyle = 'photo'; save(); toast('Foto aplicada'); }
@@ -1260,7 +1270,7 @@ Responda SOMENTE em JSON: {"frase": "mensagem de bom dia curta e marcante para a
       save(); renderCreate(); return;
     }
     const st = e.target.closest('[data-style]');
-    if (st) { S.settings.postStyle = st.dataset.style; save(); renderCreate(); return; }
+    if (st) { S.settings.postStyle = st.dataset.style; delete S.settings.textPos; save(); renderCreate(); return; }
     const f = e.target.closest('[data-fmt]');
     if (f) { createState.format = f.dataset.fmt; renderCreate(); return; }
     const bgb = e.target.closest('[data-bg]');
