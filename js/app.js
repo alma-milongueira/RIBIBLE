@@ -72,7 +72,6 @@
     else { for (let t = 0.15; lum(text) < 0.28 && t < 0.95; t += 0.08) text = Creative.mix(acc, '#ffffff', t); }
     const lightV = Creative.mix(acc, '#ffffff', 0.45), darkV = Creative.mix(acc, '#000000', 0.38);
     root.style.setProperty('--gold', text);
-    root.style.setProperty('--gold-light', light ? Creative.mix(text, '#000000', 0.55) : Creative.mix(text, '#ffffff', 0.45));
     root.style.setProperty('--acc-rgb', Creative.hexRgb(text).join(', '));
     root.style.setProperty('--grad', `linear-gradient(135deg, ${lightV} 0%, ${acc} 45%, ${darkV} 100%)`);
     root.style.setProperty('--on-acc', lum(acc) > 0.35 ? '#111' : '#fff');
@@ -224,10 +223,40 @@
     document.querySelectorAll('.view').forEach((v) => v.classList.toggle('active', v.id === `view-${view}`));
     document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t.dataset.go === view));
     $('.composer')?.remove();
+    closeDrawer();
     renderers[view](opts);
+    updateDrawer();
     if (!opts.keepScroll) window.scrollTo({ top: 0 });
     if (location.hash !== `#${view}`) history.replaceState(null, '', `#${view}`);
   }
+  // ---- Menu lateral ----
+  function openDrawer() { updateDrawer(); $('#drawer').classList.add('open'); $('#drawer-backdrop').classList.add('open'); }
+  function closeDrawer() { $('#drawer')?.classList.remove('open'); $('#drawer-backdrop')?.classList.remove('open'); }
+  $('#menu-btn').addEventListener('click', openDrawer);
+  $('#drawer-backdrop').addEventListener('click', closeDrawer);
+  function updateDrawer() {
+    document.querySelectorAll('.drawer-item').forEach((d) => d.classList.toggle('active', d.dataset.go === current));
+    const left = Math.max(0, (S.settings.goal || 3) - (S.readLog[dateKey()] || 0));
+    const pend = todaysTasks().filter((t) => !doneToday().includes(t.id)).length;
+    const badges = { bible: left, tasks: pend, create: S.creativeSeen === dateKey() ? 0 : 1 };
+    document.querySelectorAll('[data-badge]').forEach((b) => {
+      const n = badges[b.dataset.badge];
+      b.hidden = !n; b.textContent = n;
+    });
+  }
+  function pageHead(icon, title, sub) {
+    const ICONS = {
+      home: '<rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/>',
+      business: '<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2M3 13h18"/>',
+      create: '<rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="2"/><path d="M21 15l-5-5L5 21"/>',
+      mentor: '<path d="M12 3l1.8 4.6L18 9l-4.2 1.4L12 15l-1.8-4.6L6 9l4.2-1.4z"/><path d="M19 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/>',
+      tasks: '<path d="M9 11l3 3 8-8"/><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9"/>',
+      settings: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/>',
+    };
+    return `<div class="page-head"><div class="ph-icon"><svg viewBox="0 0 24 24">${ICONS[icon]}</svg></div>
+      <div><h1 class="page-title">${title}</h1><p class="page-sub">${sub}</p></div></div>`;
+  }
+
   document.addEventListener('click', (e) => {
     const g = e.target.closest('[data-go]');
     if (g) { e.preventDefault(); closeSheet(); go(g.dataset.go); }
@@ -251,9 +280,12 @@
     const daysLeft = Math.ceil((TOTAL_CHAPTERS - read) / goal);
 
     el.innerHTML = `
-      <p class="eyebrow" style="margin:4px 2px 2px">${esc(longDate())}</p>
-      <h1 class="page-title">${greet}, empreendedor</h1>
-      <p class="page-sub">Comece o dia com a Palavra antes do mercado.</p>
+      ${pageHead('home', 'Visão Geral', `${greet}! Resumo espiritual de ${esc(longDate())}.`)}
+      <div class="row wrap" style="margin-bottom:18px">
+        <button class="btn primary" data-act="open-ch" data-book="${cont.book}" data-ch="${cont.ch}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg> Ler agora</button>
+        <button class="btn" data-go="create"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="2"/><path d="M21 15l-5-5L5 21"/></svg> Post do dia</button>
+        <button class="btn ghost" data-go="mentor"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3l1.8 4.6L18 9l-4.2 1.4L12 15l-1.8-4.6L6 9l4.2-1.4z"/></svg> Mentor</button>
+      </div>
 
       <div class="card glow">
         <div class="eyebrow">✦ Mensagem do dia</div>
@@ -271,18 +303,30 @@
       </div>
 
       <div class="section-title">Progresso de leitura</div>
-      <div class="card">
-        <div class="row" style="gap:16px">
-          ${ring(pct)}
-          <div style="flex:1;min-width:0">
-            <div class="eyebrow">Bíblia completa</div>
-            <div style="color:var(--gold-light);font-weight:600;margin:4px 0">${read} de ${TOTAL_CHAPTERS} capítulos</div>
-            <div class="small muted">Hoje: ${todayRead}/${goal} capítulos ${todayRead >= goal ? '✓' : ''}</div>
-            <div class="progress" style="margin-top:8px"><i style="width:${Math.min(100, (todayRead / goal) * 100)}%"></i></div>
+      <div class="card glow">
+        <div class="row" style="align-items:flex-start">
+          <div style="flex:1">
+            <div style="font-size:16px;color:var(--gold-light)">Leitura hoje</div>
+            <div class="big-num" style="margin-top:10px">${todayRead} <span style="font-size:20px;color:var(--gold-dim);font-weight:700">capítulo${todayRead === 1 ? '' : 's'}</span></div>
+          </div>
+          <div style="text-align:right">
+            <div class="muted" style="font-size:14px">Meta diária</div>
+            <div class="acc" style="font-family:var(--display);font-weight:800;font-size:24px;margin-top:4px">${goal} cap.</div>
           </div>
         </div>
+        <div class="progress" style="margin:20px 0 12px"><i style="width:${Math.min(100, (todayRead / goal) * 100)}%"></i></div>
+        <div class="muted">${todayRead >= goal ? '<b class="acc">Meta concluída hoje!</b> Deus honra a constância.' : `Faltam <b class="acc">${goal - todayRead} capítulo${goal - todayRead === 1 ? '' : 's'}</b> para a meta.`}</div>
+        <div class="divider"></div>
+        <div class="row" style="align-items:center">
+          <div style="flex:1">
+            <div style="font-size:16px;color:var(--gold-light)">Bíblia completa</div>
+            <div class="big-num acc" style="margin-top:10px">${pct < 10 ? pct.toFixed(1) : Math.round(pct)}%</div>
+          </div>
+          <span class="pill green">🔥 ${streak()} dia${streak() === 1 ? '' : 's'} seguido${streak() === 1 ? '' : 's'}</span>
+        </div>
+        <div class="muted small" style="margin-top:10px">${read} de ${TOTAL_CHAPTERS} capítulos lidos na King James.</div>
         <div class="stats">
-          <div class="stat"><b>${streak()}</b><span>dias seguidos</span></div>
+          <div class="stat"><b>${read}</b><span>capítulos</span></div>
           <div class="stat"><b>${Object.keys(S.read).filter((k) => (S.read[k] || []).length === bookById(k)?.c).length}</b><span>livros lidos</span></div>
           <div class="stat"><b>${read >= TOTAL_CHAPTERS ? '🏆' : daysLeft}</b><span>${read >= TOTAL_CHAPTERS ? 'concluída' : 'dias p/ concluir'}</span></div>
         </div>
@@ -535,8 +579,7 @@
   // ================= NEGÓCIOS =================
   function renderBusiness() {
     $('#view-business').innerHTML = `
-      <h1 class="page-title">Decisões à luz da Bíblia</h1>
-      <p class="page-sub">Princípios eternos para escolhas de negócio.</p>
+      ${pageHead('business', 'Decisões', 'Princípios bíblicos para escolhas de negócio.')}
       <div class="card glow">
         <div class="eyebrow">✦ Estou diante de uma decisão</div>
         <p class="small muted" style="margin:8px 0 10px">Descreva a situação. O Mentor IA vai analisar sob a ótica bíblica: princípios, perguntas, riscos, próximo passo e uma oração.</p>
@@ -650,8 +693,7 @@ Regras:
     const hasKey = !!S.settings.apiKey;
     const chips = [pick(DAILY_QUESTIONS, dayNum()), 'Um devocional curto para começar o dia', 'Como lidar com a ansiedade nos negócios?', 'Me dê um versículo para uma reunião difícil', 'Como orar pelo meu negócio?'];
     el.innerHTML = `
-      <h1 class="page-title">Mentor IA</h1>
-      <p class="page-sub">Pergunte como agir ou tire dúvidas sobre a Bíblia.</p>
+      ${pageHead('mentor', 'Mentor IA', 'Pergunte como agir ou tire dúvidas sobre a Bíblia.')}
       ${!hasKey ? `
       <div class="card glow">
         <div class="eyebrow">✦ Ative o Mentor gratuitamente</div>
@@ -771,10 +813,10 @@ Responda SOMENTE em JSON: {"texto": "no máximo 170 caracteres", "referencia": "
 
   function renderCreate() {
     const c = getDailyCreative();
+    if (S.creativeSeen !== dateKey()) { S.creativeSeen = dateKey(); save(); }
     const el = $('#view-create');
     el.innerHTML = `
-      <h1 class="page-title">Estúdio de Posts</h1>
-      <p class="page-sub">Todo dia um post e um stories novos, prontos para publicar.</p>
+      ${pageHead('create', 'Estúdio de Posts', 'Post e stories novos todos os dias.')}
       <div class="seg" style="margin-bottom:14px">
         <button class="${createState.format === 'post' ? 'active' : ''}" data-fmt="post">Post 4:5</button>
         <button class="${createState.format === 'story' ? 'active' : ''}" data-fmt="story">Stories 9:16</button>
@@ -946,8 +988,7 @@ Responda SOMENTE em JSON: {"texto": "no máximo 170 caracteres", "referencia": "
     const today = todaysTasks();
     const cats = [...new Set(TASKS.map((t) => t.cat))];
     $('#view-tasks').innerHTML = `
-      <h1 class="page-title">Tarefas cristãs</h1>
-      <p class="page-sub">Pequenas obras que tornam o mundo melhor. “Assim brilhe a vossa luz diante dos homens.” — Mateus 5:16</p>
+      ${pageHead('tasks', 'Tarefas cristãs', 'Pequenas obras que tornam o mundo melhor.')}
       <div class="stats" style="margin-top:0;margin-bottom:12px">
         <div class="stat"><b>${doneToday().length}</b><span>hoje</span></div>
         <div class="stat"><b>${totalGoodWorks()}</b><span>boas obras</span></div>
@@ -966,8 +1007,7 @@ Responda SOMENTE em JSON: {"texto": "no máximo 170 caracteres", "referencia": "
   function renderSettings() {
     const s = S.settings;
     $('#view-settings').innerHTML = `
-      <h1 class="page-title">Ajustes</h1>
-      <p class="page-sub">Tudo fica salvo apenas neste aparelho.</p>
+      ${pageHead('settings', 'Ajustes', 'Tudo fica salvo apenas neste aparelho.')}
 
       <div class="section-title">Aparência</div>
       <div class="card">
